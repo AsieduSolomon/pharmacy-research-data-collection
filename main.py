@@ -129,20 +129,9 @@ st.markdown("""
 # SUPABASE HELPERS
 # ─────────────────────────────────────────────
 def insert_response(data: dict) -> bool:
-    """Insert a survey response and trigger the Supabase Edge Function for thank-you email."""
+    """Insert a survey response into Supabase."""
     try:
         supabase.table("responses").insert(data).execute()
-        # Trigger thank-you email via Supabase Edge Function (if email provided)
-        email = data.get("pharmacist_email", "").strip()
-        name  = data.get("pharmacist_name", "Pharmacist").strip()
-        if email:
-            try:
-                supabase.functions.invoke(
-                    "send-thankyou-email",
-                    invoke_options={"body": {"to": email, "name": name}}
-                )
-            except Exception:
-                pass  # Email failure should not block submission
         return True
     except Exception as e:
         st.error(f"Database error: {e}")
@@ -239,7 +228,7 @@ def page_survey():
                 "Licensed Chemical Shop", "Wholesale Pharmacy"
             ])
         with col2:
-            pharmacist_email = st.text_input("Email Address (optional — for thank-you message)", placeholder="name@example.com")
+            pharmacist_email = st.text_input("Email Address (optional)", placeholder="name@example.com")
             years_experience = st.number_input("Years of Professional Experience *", min_value=0, max_value=60, step=1)
             num_staff        = st.number_input("Total Number of Staff in Pharmacy *", min_value=1, max_value=200, step=1)
             location_type    = st.selectbox("Pharmacy Location *", [
@@ -481,12 +470,11 @@ def page_survey():
                 }
                 ok = insert_response(data)
                 if ok:
-                    email_note = " A thank-you message has been sent to your email." if pharmacist_email.strip() else ""
-                    st.markdown(f"""
+                    st.markdown("""
                     <div class="success-box">
                         <h2>✅ Response Submitted Successfully!</h2>
                         <p style="color:#065A82; font-size:1.05em;">
-                            Thank you for completing this survey.{email_note}<br>
+                            Thank you for completing this survey.<br>
                             Your contribution is vital to improving drug storage practices
                             and patient safety in the Sunyani Municipality.
                         </p>
@@ -1269,7 +1257,6 @@ def page_about():
     | User Interface | Streamlit (hosted on Streamlit Cloud) |
     | Database | Supabase (PostgreSQL) |
     | Charts | Plotly (interactive) |
-    | Email Notifications | Supabase Edge Functions (built-in — no third party) |
     | Language | Python 3.x |
 
     ---
