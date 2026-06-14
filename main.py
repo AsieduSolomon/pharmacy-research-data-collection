@@ -1,23 +1,19 @@
 """
 Drug Storage Conditions Survey
 Sunyani Technical University — Department of Pharmacy
-Upgraded: Supabase backend · Admin panel · Rich analytics · Thesis report export
+Supabase · Rich Charts · PDF & Word Report Export
 """
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import re
-import os
 from datetime import datetime
 from io import BytesIO
+from collections import Counter
 
-# ── Supabase client ─────────────────────────────────────────────
 from supabase import create_client, Client
-
-# Pull credentials from Streamlit secrets (set in .streamlit/secrets.toml or Streamlit Cloud)
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
@@ -27,109 +23,51 @@ def get_supabase() -> Client:
 
 supabase: Client = get_supabase()
 
-# ─────────────────────────────────────────────
-# PAGE CONFIG
-# ─────────────────────────────────────────────
-st.set_page_config(
-    page_title="Drug Storage Survey | STU",
-    page_icon="💊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Drug Storage Survey | STU", page_icon="💊",
+                   layout="wide", initial_sidebar_state="expanded")
 
-# ─────────────────────────────────────────────
-# COLOUR PALETTE
-# ─────────────────────────────────────────────
-TEAL   = "#028090"
-GREEN  = "#02C39A"
-NAVY   = "#065A82"
-CORAL  = "#F96167"
-GOLD   = "#F9C74F"
-MINT   = "#90E0EF"
-SLATE  = "#1C7293"
-AMBER  = "#F4A261"
-PURPLE = "#7B2D8B"
-ROSE   = "#E63946"
+TEAL="#028090"; GREEN="#02C39A"; NAVY="#065A82"; CORAL="#F96167"
+GOLD="#F9C74F"; MINT="#90E0EF"; SLATE="#1C7293"; AMBER="#F4A261"; PURPLE="#7B2D8B"
+PAL=[TEAL,GREEN,CORAL,GOLD,NAVY,AMBER,MINT,SLATE,PURPLE]
 
-# ─────────────────────────────────────────────
-# CUSTOM CSS
-# ─────────────────────────────────────────────
 st.markdown("""
 <style>
-    .main-header {
-        background: linear-gradient(135deg, #028090 0%, #065A82 60%, #21295C 100%);
-        padding: 28px 35px;
-        border-radius: 14px;
-        margin-bottom: 25px;
-        color: white;
-        text-align: center;
-        box-shadow: 0 4px 20px rgba(2,128,144,0.25);
-    }
-    .main-header h1 { font-size: 1.65em; margin: 0; font-weight: 800; }
-    .main-header p  { font-size: 0.92em; margin: 5px 0 0; opacity: 0.88; }
-
-    .section-card {
-        background: #f8fdfe;
-        border-left: 5px solid #028090;
-        border-radius: 8px;
-        padding: 16px 20px;
-        margin: 20px 0 10px;
-    }
-    .section-title {
-        color: #065A82;
-        font-size: 1.05em;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .metric-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px 12px;
-        text-align: center;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        border-top: 4px solid #028090;
-        margin-bottom: 8px;
-    }
-    .metric-value { font-size: 2em; font-weight: 800; color: #028090; }
-    .metric-label { font-size: 0.82em; color: #555; margin-top: 4px; }
-
-    .success-box {
-        background: linear-gradient(135deg, #e8faf7, #d0f5ee);
-        border: 2px solid #02C39A;
-        border-radius: 12px;
-        padding: 32px;
-        text-align: center;
-        margin: 20px 0;
-    }
-    .info-banner {
-        background: linear-gradient(90deg, #028090, #00A896);
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        margin-bottom: 16px;
-        font-size: 0.92em;
-    }
-    .admin-banner {
-        background: linear-gradient(135deg, #21295C, #065A82);
-        color: white;
-        padding: 18px 24px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-        font-size: 0.95em;
-        border-left: 6px solid #F9C74F;
-    }
-    footer { visibility: hidden; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+html,body,[class*="css"]{font-family:'Inter',sans-serif;}
+.main-header{background:linear-gradient(135deg,#028090 0%,#065A82 55%,#21295C 100%);
+  padding:32px 40px;border-radius:16px;margin-bottom:28px;color:white;text-align:center;
+  box-shadow:0 8px 32px rgba(2,128,144,.30);}
+.main-header h1{font-size:1.75em;margin:0;font-weight:800;letter-spacing:-.5px;}
+.main-header p{font-size:.92em;margin:6px 0 0;opacity:.88;}
+.section-card{background:linear-gradient(90deg,#f0fafc,#f8fdfe);border-left:6px solid #028090;
+  border-radius:10px;padding:14px 20px;margin:22px 0 10px;
+  box-shadow:0 2px 8px rgba(2,128,144,.08);}
+.section-title{color:#065A82;font-size:1.0em;font-weight:700;text-transform:uppercase;letter-spacing:.8px;}
+.kpi-card{background:white;border-radius:14px;padding:22px 14px;text-align:center;
+  box-shadow:0 4px 18px rgba(0,0,0,.07);border-top:5px solid #028090;margin-bottom:10px;}
+.kpi-value{font-size:2.2em;font-weight:800;color:#028090;}
+.kpi-label{font-size:.80em;color:#666;margin-top:5px;font-weight:600;}
+.kpi-green{border-top-color:#02C39A;} .kpi-green .kpi-value{color:#02C39A;}
+.kpi-coral{border-top-color:#F96167;} .kpi-coral .kpi-value{color:#F96167;}
+.kpi-gold{border-top-color:#F9C74F;}  .kpi-gold .kpi-value{color:#c49a00;}
+.kpi-navy{border-top-color:#065A82;}  .kpi-navy .kpi-value{color:#065A82;}
+.success-box{background:linear-gradient(135deg,#e8faf7,#d0f5ee);border:2px solid #02C39A;
+  border-radius:14px;padding:36px;text-align:center;margin:24px 0;}
+.info-banner{background:linear-gradient(90deg,#028090,#00A896);color:white;
+  padding:13px 22px;border-radius:10px;margin-bottom:18px;font-size:.92em;}
+.admin-banner{background:linear-gradient(135deg,#21295C,#065A82);color:white;
+  padding:20px 26px;border-radius:12px;margin-bottom:22px;
+  border-left:6px solid #F9C74F;}
+.chart-insight{background:linear-gradient(90deg,#f0fafc,#e8f7fb);
+  border-left:4px solid #028090;border-radius:8px;
+  padding:10px 16px;font-size:.85em;color:#065A82;margin-top:6px;font-weight:500;}
+.section-divider{border:none;border-top:2px solid #e0f0f4;margin:32px 0;}
+footer{visibility:hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────
-# SUPABASE HELPERS
-# ─────────────────────────────────────────────
-def insert_response(data: dict) -> bool:
-    """Insert a survey response into Supabase."""
+# ── DB helpers ───────────────────────────────────────────────────
+def insert_response(data):
     try:
         supabase.table("responses").insert(data).execute()
         return True
@@ -137,8 +75,7 @@ def insert_response(data: dict) -> bool:
         st.error(f"Database error: {e}")
         return False
 
-
-def fetch_all() -> pd.DataFrame:
+def fetch_all():
     try:
         res = supabase.table("responses").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
@@ -146,1188 +83,1183 @@ def fetch_all() -> pd.DataFrame:
         st.error(f"Failed to fetch data: {e}")
         return pd.DataFrame()
 
-
-def delete_response(rid: int):
+def delete_response(rid):
     supabase.table("responses").delete().eq("id", rid).execute()
 
-
-def response_count() -> int:
+def response_count():
     try:
         res = supabase.table("responses").select("id", count="exact").execute()
         return res.count or 0
-    except Exception:
+    except:
         return 0
 
+def prep_df(df):
+    bool_cols=["has_ac","has_refrigerator","has_thermometer","has_hygrometer",
+               "has_proper_shelving","has_ventilation","has_direct_sunlight",
+               "has_written_sop","gsp_training_received","fda_inspected",
+               "observed_degradation","observed_color_change","potency_complaints","returned_stock_quality"]
+    for c in bool_cols:
+        if c in df.columns:
+            df[c]=pd.to_numeric(df[c],errors="coerce").fillna(0).astype(int)
+    return df
 
-# ─────────────────────────────────────────────
-# VALIDATION
-# ─────────────────────────────────────────────
-def is_valid_email(email: str) -> bool:
-    return bool(re.match(r"^[\w\.\+\-]+@[\w\-]+\.[a-zA-Z]{2,}$", email))
+# ── Chart helpers ────────────────────────────────────────────────
+LAYOUT_BASE=dict(font=dict(family="Inter,Arial,sans-serif",size=12,color="#333"),
+  plot_bgcolor="white",paper_bgcolor="white",margin=dict(l=20,r=20,t=70,b=20),
+  hoverlabel=dict(bgcolor="white",font_size=13,font_family="Inter"))
 
+def apply_layout(fig,title,subtitle="",height=400,**kw):
+    ttl=f"<b>{title}</b>"+(f"<br><sup style='color:#666'>{subtitle}</sup>" if subtitle else "")
+    fig.update_layout(**LAYOUT_BASE,
+      title=dict(text=ttl,font=dict(size=15,color="#065A82"),x=0.01,xanchor="left"),
+      height=height,**kw)
+    fig.update_xaxes(showgrid=True,gridcolor="#f0f0f0",zeroline=False)
+    fig.update_yaxes(showgrid=True,gridcolor="#f0f0f0",zeroline=False)
+    return fig
 
-# ─────────────────────────────────────────────
-# ADMIN AUTH
-# ─────────────────────────────────────────────
-ADMIN_PASSWORD = "kwame"
+def insight(text):
+    st.markdown(f'<div class="chart-insight">💡 {text}</div>',unsafe_allow_html=True)
 
-def require_admin() -> bool:
-    """Returns True if admin is authenticated for this session."""
+# ── Auth ─────────────────────────────────────────────────────────
+ADMIN_PASSWORD="kwame"
+
+def require_admin():
     if st.session_state.get("admin_authenticated"):
         return True
-    st.markdown('<div class="admin-banner">🔐 <b>Admin Panel</b> — Restricted Access</div>', unsafe_allow_html=True)
-    pwd = st.text_input("Enter admin password", type="password", key="admin_pwd_input")
-    if st.button("🔓 Unlock Admin Panel"):
-        if pwd == ADMIN_PASSWORD:
-            st.session_state["admin_authenticated"] = True
+    st.markdown('<div class="admin-banner">🔐 <b>Admin Panel</b> — Restricted Access<br>'
+                '<small>Enter the admin password to continue.</small></div>',unsafe_allow_html=True)
+    pwd=st.text_input("Admin Password",type="password",key="admin_pwd_input")
+    if st.button("🔓 Unlock Admin Panel",use_container_width=True):
+        if pwd==ADMIN_PASSWORD:
+            st.session_state["admin_authenticated"]=True
             st.rerun()
         else:
-            st.error("❌ Incorrect password. Access denied.")
+            st.error("❌ Incorrect password.")
     return False
 
+def is_valid_email(e):
+    return bool(re.match(r"^[\w\.\+\-]+@[\w\-]+\.[a-zA-Z]{2,}$",e))
 
-# ─────────────────────────────────────────────
-# HEADER
-# ─────────────────────────────────────────────
 def render_header():
     st.markdown("""
     <div class="main-header">
-        <h1>💊 Drug Storage Conditions Survey</h1>
-        <p><strong>Sunyani Technical University</strong> &nbsp;|&nbsp; Department of Pharmacy</p>
-        <p style="font-size:0.80em; opacity:0.75; margin-top:6px;">
-            Evaluation of Storage Conditions of Drugs in Community Pharmacies and Their
-            Influence on Drug Potency and Shelf Life in the Sunyani Municipality, Ghana &mdash; 2026
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+      <h1>💊 Drug Storage Conditions Survey</h1>
+      <p><strong>Sunyani Technical University</strong> &nbsp;|&nbsp; Department of Pharmacy</p>
+      <p style="font-size:.78em;opacity:.75;margin-top:7px;">
+        Evaluation of Storage Conditions of Drugs in Community Pharmacies and Their
+        Influence on Drug Potency and Shelf Life in the Sunyani Municipality, Ghana — 2026
+      </p>
+    </div>""",unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────
+# ════════════════════════════════════════════════════════
 # PAGE: SURVEY
-# ─────────────────────────────────────────────
+# ════════════════════════════════════════════════════════
 def page_survey():
-    st.markdown("""
-    <div class="info-banner">
-        📋 &nbsp; Please answer all questions as honestly as possible.
-        Your responses are <strong>confidential</strong> and will be used solely for academic research.
-        Fields marked <strong>*</strong> are required.
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="info-banner">📋 &nbsp;Please answer all questions honestly. '
+                'Responses are <strong>confidential</strong> and for academic research only. '
+                'Fields marked <strong>*</strong> are required.</div>',unsafe_allow_html=True)
+    with st.form("survey_form",clear_on_submit=True):
+        st.markdown('<div class="section-card"><div class="section-title">🏪 Section A — Pharmacy & Pharmacist Profile</div></div>',unsafe_allow_html=True)
+        c1,c2=st.columns(2)
+        with c1:
+            pharmacy_name   =st.text_input("Name of Pharmacy *",placeholder="e.g. Sunshine Pharmacy")
+            pharmacist_name =st.text_input("Name of Pharmacist / Respondent *",placeholder="Full name")
+            reg_number      =st.text_input("Pharmacy Council Registration Number *",placeholder="e.g. PC/2019/001")
+            pharmacy_type   =st.selectbox("Type of Pharmacy *",["-- Select --","Retail Community Pharmacy","Hospital Pharmacy","Licensed Chemical Shop","Wholesale Pharmacy"])
+        with c2:
+            pharmacist_email=st.text_input("Email Address (optional)",placeholder="name@example.com")
+            years_experience=st.number_input("Years of Professional Experience *",min_value=0,max_value=60,step=1)
+            num_staff       =st.number_input("Total Number of Staff *",min_value=1,max_value=200,step=1)
+            location_type   =st.selectbox("Pharmacy Location *",["-- Select --","Urban (City Centre)","Peri-urban","Rural"])
 
-    with st.form("survey_form", clear_on_submit=True):
-
-        # ── SECTION A ──────────────────────────────────────────
-        st.markdown('<div class="section-card"><div class="section-title">🏪 Section A — Pharmacy & Pharmacist Profile</div></div>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            pharmacy_name   = st.text_input("Name of Pharmacy *", placeholder="e.g. Sunshine Pharmacy")
-            pharmacist_name = st.text_input("Name of Pharmacist / Respondent *", placeholder="Full name")
-            reg_number      = st.text_input("Pharmacy Council Registration Number *", placeholder="e.g. PC/2019/001")
-            pharmacy_type   = st.selectbox("Type of Pharmacy *", [
-                "-- Select --", "Retail Community Pharmacy", "Hospital Pharmacy",
-                "Licensed Chemical Shop", "Wholesale Pharmacy"
-            ])
-        with col2:
-            pharmacist_email = st.text_input("Email Address (optional)", placeholder="name@example.com")
-            years_experience = st.number_input("Years of Professional Experience *", min_value=0, max_value=60, step=1)
-            num_staff        = st.number_input("Total Number of Staff in Pharmacy *", min_value=1, max_value=200, step=1)
-            location_type    = st.selectbox("Pharmacy Location *", [
-                "-- Select --", "Urban (City Centre)", "Peri-urban", "Rural"
-            ])
-
-        # ── SECTION B ──────────────────────────────────────────
-        st.markdown('<div class="section-card"><div class="section-title">🌡️ Section B — Physical Storage Conditions & Facilities</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-card"><div class="section-title">🌡️ Section B — Physical Storage Conditions & Facilities</div></div>',unsafe_allow_html=True)
         st.markdown("**Does your pharmacy have the following equipment?**")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            has_ac           = st.radio("Air Conditioning Unit *", ["Yes", "No"], horizontal=True)
-            has_refrigerator = st.radio("Functional Refrigerator *", ["Yes", "No"], horizontal=True)
-        with col2:
-            has_thermometer  = st.radio("Room Thermometer *", ["Yes", "No"], horizontal=True)
-            has_hygrometer   = st.radio("Hygrometer (Humidity Meter) *", ["Yes", "No"], horizontal=True)
-        with col3:
-            has_proper_shelving = st.radio("Proper Drug Shelving *", ["Yes", "No"], horizontal=True)
-            has_ventilation     = st.radio("Adequate Ventilation *", ["Yes", "No"], horizontal=True)
+        c1,c2,c3=st.columns(3)
+        with c1:
+            has_ac          =st.radio("Air Conditioning Unit *",["Yes","No"],horizontal=True)
+            has_refrigerator=st.radio("Functional Refrigerator *",["Yes","No"],horizontal=True)
+        with c2:
+            has_thermometer =st.radio("Room Thermometer *",["Yes","No"],horizontal=True)
+            has_hygrometer  =st.radio("Hygrometer (Humidity Meter) *",["Yes","No"],horizontal=True)
+        with c3:
+            has_proper_shelving=st.radio("Proper Drug Shelving *",["Yes","No"],horizontal=True)
+            has_ventilation    =st.radio("Adequate Ventilation *",["Yes","No"],horizontal=True)
+        c1,c2=st.columns(2)
+        with c1: has_direct_sunlight=st.radio("Drugs exposed to direct sunlight? *",["Yes","No"],horizontal=True)
+        with c2: storage_area_size=st.selectbox("Size of Main Drug Storage Area *",["-- Select --","Very small (< 10 m²)","Small (10–25 m²)","Medium (25–50 m²)","Large (> 50 m²)"])
 
-        col1, col2 = st.columns(2)
-        with col1:
-            has_direct_sunlight = st.radio("Are any drugs exposed to direct sunlight? *", ["Yes", "No"], horizontal=True)
-        with col2:
-            storage_area_size = st.selectbox("Size of Main Drug Storage Area *", [
-                "-- Select --", "Very small (< 10 m²)", "Small (10–25 m²)",
-                "Medium (25–50 m²)", "Large (> 50 m²)"
-            ])
+        st.markdown('<div class="section-card"><div class="section-title">📊 Section C — Temperature & Humidity Monitoring</div></div>',unsafe_allow_html=True)
+        c1,c2=st.columns(2)
+        with c1:
+            temp_monitoring_freq=st.selectbox("How often is room temperature recorded? *",["-- Select --","Multiple times daily","Once daily","Weekly","Monthly","Never monitored"])
+            usual_temp_range    =st.selectbox("Usual temperature range in storage area *",["-- Select --","Below 25°C  (WHO Optimal)","25°C – 30°C  (Acceptable)","30°C – 35°C  (Risk Zone)","Above 35°C  (High Risk)","Not monitored / Unknown"])
+        with c2:
+            usual_humidity_range =st.selectbox("Usual relative humidity (RH%) *",["-- Select --","Below 45% RH  (Low)","45% – 65% RH  (Optimal)","65% – 75% RH  (Elevated Risk)","Above 75% RH  (High Risk)","Not monitored / Unknown"])
+            temp_excursion_action=st.selectbox("Action taken when temperature exceeds limits *",["-- Select --","Move drugs to refrigerator / cooler area","Increase ventilation or switch on AC","Document and notify supervisor","No specific action taken","No system in place to detect excursions"])
+        has_written_sop=st.radio("Does your pharmacy have a written SOP for drug storage? *",["Yes","No"],horizontal=True)
 
-        # ── SECTION C ──────────────────────────────────────────
-        st.markdown('<div class="section-card"><div class="section-title">📊 Section C — Temperature & Humidity Monitoring</div></div>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            temp_monitoring_freq = st.selectbox("How often is room temperature recorded? *", [
-                "-- Select --", "Multiple times daily", "Once daily",
-                "Weekly", "Monthly", "Never monitored"
-            ])
-            usual_temp_range = st.selectbox("Usual temperature range in your storage area *", [
-                "-- Select --",
-                "Below 25°C  (WHO Optimal)",
-                "25°C – 30°C  (Acceptable)",
-                "30°C – 35°C  (Risk Zone)",
-                "Above 35°C  (High Risk)",
-                "Not monitored / Unknown"
-            ])
-        with col2:
-            usual_humidity_range = st.selectbox("Usual relative humidity (RH%) in storage area *", [
-                "-- Select --",
-                "Below 45% RH  (Low)",
-                "45% – 65% RH  (Optimal)",
-                "65% – 75% RH  (Elevated Risk)",
-                "Above 75% RH  (High Risk)",
-                "Not monitored / Unknown"
-            ])
-            temp_excursion_action = st.selectbox("Action taken when temperature exceeds limits *", [
-                "-- Select --",
-                "Move drugs to refrigerator / cooler area",
-                "Increase ventilation or switch on AC",
-                "Document and notify supervisor",
-                "No specific action taken",
-                "No system in place to detect excursions"
-            ])
-        has_written_sop = st.radio(
-            "Does your pharmacy have a written Standard Operating Procedure (SOP) for drug storage? *",
-            ["Yes", "No"], horizontal=True
-        )
+        st.markdown('<div class="section-card"><div class="section-title">✅ Section D — Drug Handling & WHO GSP Compliance</div></div>',unsafe_allow_html=True)
+        c1,c2=st.columns(2)
+        with c1:
+            gsp_training_received=st.radio("Have you received WHO GSP training? *",["Yes","No"],horizontal=True)
+            last_training_year   =st.selectbox("If yes — most recent training?",["N/A — No training received","2024 – 2025","2021 – 2023","2018 – 2020","Before 2018"])
+            practises_fifo       =st.radio("Do you practise FIFO stock rotation? *",["Yes","No","Sometimes"],horizontal=True)
+        with c2:
+            checks_expiry          =st.radio("Do you regularly inspect for expiry dates? *",["Yes","No","Sometimes"],horizontal=True)
+            segregates_thermolabile=st.radio("Temperature-sensitive drugs stored separately under cold conditions? *",["Yes","No","Not Applicable"],horizontal=True)
+            fda_inspected          =st.radio("Inspected by FDA Ghana in the last 2 years? *",["Yes","No"],horizontal=True)
+        self_compliance_rating=st.select_slider("Rate your pharmacy's overall WHO GSP compliance *",options=["Very Poor","Poor","Fair","Good","Excellent"],value="Fair")
 
-        # ── SECTION D ──────────────────────────────────────────
-        st.markdown('<div class="section-card"><div class="section-title">✅ Section D — Drug Handling & WHO Good Storage Practice (GSP) Compliance</div></div>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            gsp_training_received = st.radio(
-                "Have you received training on WHO Good Storage Practices (GSP)? *",
-                ["Yes", "No"], horizontal=True
-            )
-            last_training_year = st.selectbox("If yes — when was your most recent training?", [
-                "N/A — No training received", "2024 – 2025",
-                "2021 – 2023", "2018 – 2020", "Before 2018"
-            ])
-            practises_fifo = st.radio(
-                "Do you practise First-In-First-Out (FIFO) stock rotation? *",
-                ["Yes", "No", "Sometimes"], horizontal=True
-            )
-        with col2:
-            checks_expiry = st.radio(
-                "Do you regularly inspect stock for expiry dates? *",
-                ["Yes", "No", "Sometimes"], horizontal=True
-            )
-            segregates_thermolabile = st.radio(
-                "Are temperature-sensitive drugs (e.g. insulin, vaccines, suppositories) stored separately under cold conditions? *",
-                ["Yes", "No", "Not Applicable"], horizontal=True
-            )
-            fda_inspected = st.radio(
-                "Has your pharmacy been inspected by the FDA Ghana in the last 2 years? *",
-                ["Yes", "No"], horizontal=True
-            )
-        self_compliance_rating = st.select_slider(
-            "How would you rate your pharmacy's overall compliance with WHO Good Storage Practices? *",
-            options=["Very Poor", "Poor", "Fair", "Good", "Excellent"], value="Fair"
-        )
+        st.markdown('<div class="section-card"><div class="section-title">⚠️ Section E — Observed Drug Quality & Potency Issues</div></div>',unsafe_allow_html=True)
+        c1,c2=st.columns(2)
+        with c1:
+            observed_degradation  =st.radio("Observed physical signs of drug degradation? *",["Yes","No"],horizontal=True)
+            degradation_drug_types=st.multiselect("If yes — which drug types?",["Antibiotics (tablets/capsules)","Syrups / Oral liquids","Antimalarials","Antihypertensives","Injectables / Vaccines","Suppositories / Pessaries","Topical creams / ointments","Other"])
+            observed_color_change =st.radio("Noticed unusual colour change in any drug? *",["Yes","No"],horizontal=True)
+        with c2:
+            potency_complaints    =st.radio("Patients complained medicine was not working? *",["Yes","No"],horizontal=True)
+            returned_stock_quality=st.radio("Returned or discarded stock due to quality deterioration? *",["Yes","No"],horizontal=True)
+            num_quality_incidents =st.selectbox("Drug quality incidents in the last 12 months? *",["-- Select --","None","1 – 3","4 – 6","7 – 10","More than 10"])
 
-        # ── SECTION E ──────────────────────────────────────────
-        st.markdown('<div class="section-card"><div class="section-title">⚠️ Section E — Observed Drug Quality & Potency Issues</div></div>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            observed_degradation = st.radio(
-                "Have you ever observed physical signs of drug degradation (melting, crystallisation, caking, unusual smell)? *",
-                ["Yes", "No"], horizontal=True
-            )
-            degradation_drug_types = st.multiselect(
-                "If yes — which drug types were affected? (select all that apply)",
-                ["Antibiotics (tablets/capsules)", "Syrups / Oral liquids", "Antimalarials",
-                 "Antihypertensives", "Injectables / Vaccines",
-                 "Suppositories / Pessaries", "Topical creams / ointments", "Other"]
-            )
-            observed_color_change = st.radio(
-                "Have you noticed unusual colour change or discolouration in any drug? *",
-                ["Yes", "No"], horizontal=True
-            )
-        with col2:
-            potency_complaints = st.radio(
-                "Have patients ever complained that a medicine 'was not working' or appeared ineffective? *",
-                ["Yes", "No"], horizontal=True
-            )
-            returned_stock_quality = st.radio(
-                "Have you returned or discarded drug stock due to suspected quality deterioration? *",
-                ["Yes", "No"], horizontal=True
-            )
-            num_quality_incidents = st.selectbox(
-                "Approximately how many drug quality incidents in the last 12 months? *",
-                ["-- Select --", "None", "1 – 3", "4 – 6", "7 – 10", "More than 10"]
-            )
+        st.markdown('<div class="section-card"><div class="section-title">💡 Section F — Challenges & Recommendations</div></div>',unsafe_allow_html=True)
+        biggest_challenge=st.selectbox("Biggest challenge to maintaining proper drug storage? *",["-- Select --","Frequent power outages / erratic electricity supply","High cost of air conditioning or refrigeration","Small or inadequate storage space","Lack of temperature/humidity monitoring equipment","Limited training and awareness on GSP","Insufficient regulatory inspection and enforcement","Financial constraints to upgrade facilities"])
+        support_needed=st.selectbox("Support that would most improve drug storage? *",["-- Select --","Subsidised air conditioning and refrigeration equipment","Regular GSP training workshops","Affordable data loggers or thermometers","More frequent FDA inspections and guidance","Financial support / grants for facility upgrades","National policy changes and stricter enforcement"])
+        policy_recommendation=st.text_area("Policy recommendations? (optional)",placeholder="Share your suggestions...",height=90)
+        additional_comments  =st.text_area("Additional comments? (optional)",placeholder="Anything else you would like to share...",height=80)
 
-        # ── SECTION F ──────────────────────────────────────────
-        st.markdown('<div class="section-card"><div class="section-title">💡 Section F — Challenges & Recommendations</div></div>', unsafe_allow_html=True)
-        biggest_challenge = st.selectbox(
-            "What is the BIGGEST challenge to maintaining proper drug storage in your pharmacy? *",
-            ["-- Select --",
-             "Frequent power outages / erratic electricity supply",
-             "High cost of air conditioning or refrigeration",
-             "Small or inadequate storage space",
-             "Lack of temperature/humidity monitoring equipment",
-             "Limited training and awareness on GSP",
-             "Insufficient regulatory inspection and enforcement",
-             "Financial constraints to upgrade facilities"]
-        )
-        support_needed = st.selectbox(
-            "What type of support would most improve drug storage in your pharmacy? *",
-            ["-- Select --",
-             "Subsidised air conditioning and refrigeration equipment",
-             "Regular GSP training workshops",
-             "Affordable data loggers or thermometers",
-             "More frequent FDA inspections and guidance",
-             "Financial support / grants for facility upgrades",
-             "National policy changes and stricter enforcement"]
-        )
-        policy_recommendation = st.text_area(
-            "Any policy recommendations to improve drug storage standards in Ghana? (optional)",
-            placeholder="Share your suggestions...", height=90
-        )
-        additional_comments = st.text_area(
-            "Additional comments or observations? (optional)",
-            placeholder="Anything else you would like to share...", height=80
-        )
-
-        # ── SUBMIT ─────────────────────────────────────────────
         st.markdown("---")
         st.markdown("**⚠️ Please review all answers before submitting.**")
-        submitted = st.form_submit_button("✅  Submit Survey Response", use_container_width=True)
+        submitted=st.form_submit_button("✅  Submit Survey Response",use_container_width=True)
 
         if submitted:
-            errors = []
-            if not pharmacy_name.strip():        errors.append("Pharmacy name is required.")
-            if not pharmacist_name.strip():      errors.append("Pharmacist name is required.")
-            if not reg_number.strip():           errors.append("Registration number is required.")
+            errors=[]
+            if not pharmacy_name.strip():   errors.append("Pharmacy name is required.")
+            if not pharmacist_name.strip(): errors.append("Pharmacist name is required.")
+            if not reg_number.strip():      errors.append("Registration number is required.")
             if pharmacist_email.strip() and not is_valid_email(pharmacist_email):
-                errors.append("Please enter a valid email address (e.g. name@gmail.com).")
-            dropdowns = {
-                "Type of pharmacy": pharmacy_type,
-                "Pharmacy location": location_type,
-                "Storage area size": storage_area_size,
-                "Temperature monitoring frequency": temp_monitoring_freq,
-                "Usual temperature range": usual_temp_range,
-                "Usual humidity range": usual_humidity_range,
-                "Action on temperature excursion": temp_excursion_action,
-                "Number of quality incidents": num_quality_incidents,
-                "Biggest challenge": biggest_challenge,
-                "Support needed": support_needed,
-            }
-            for label, val in dropdowns.items():
-                if val.startswith("-- Select"):
-                    errors.append(f"'{label}' is required — please select an option.")
-
+                errors.append("Please enter a valid email address.")
+            for lbl,val in {"Type of pharmacy":pharmacy_type,"Pharmacy location":location_type,
+                "Storage area size":storage_area_size,"Temperature monitoring frequency":temp_monitoring_freq,
+                "Usual temperature range":usual_temp_range,"Usual humidity range":usual_humidity_range,
+                "Action on temperature excursion":temp_excursion_action,
+                "Number of quality incidents":num_quality_incidents,
+                "Biggest challenge":biggest_challenge,"Support needed":support_needed}.items():
+                if val.startswith("-- Select"): errors.append(f"'{lbl}' is required.")
             if errors:
-                st.error("**Please fix the following errors before submitting:**")
-                for e in errors:
-                    st.markdown(f"- ❌ {e}")
+                st.error("**Please fix the following before submitting:**")
+                for e in errors: st.markdown(f"- ❌ {e}")
             else:
-                data = {
-                    "submitted_at":           datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "pharmacy_name":          pharmacy_name.strip(),
-                    "pharmacist_name":        pharmacist_name.strip(),
-                    "pharmacist_email":       pharmacist_email.strip(),
-                    "reg_number":             reg_number.strip(),
-                    "years_experience":       int(years_experience),
-                    "pharmacy_type":          pharmacy_type,
-                    "num_staff":              int(num_staff),
-                    "location_type":          location_type,
-                    "has_ac":                 1 if has_ac == "Yes" else 0,
-                    "has_refrigerator":       1 if has_refrigerator == "Yes" else 0,
-                    "has_thermometer":        1 if has_thermometer == "Yes" else 0,
-                    "has_hygrometer":         1 if has_hygrometer == "Yes" else 0,
-                    "has_proper_shelving":    1 if has_proper_shelving == "Yes" else 0,
-                    "has_ventilation":        1 if has_ventilation == "Yes" else 0,
-                    "has_direct_sunlight":    1 if has_direct_sunlight == "Yes" else 0,
-                    "storage_area_size":      storage_area_size,
-                    "temp_monitoring_freq":   temp_monitoring_freq,
-                    "usual_temp_range":       usual_temp_range,
-                    "usual_humidity_range":   usual_humidity_range,
-                    "temp_excursion_action":  temp_excursion_action,
-                    "has_written_sop":        1 if has_written_sop == "Yes" else 0,
-                    "gsp_training_received":  1 if gsp_training_received == "Yes" else 0,
-                    "last_training_year":     last_training_year,
-                    "practises_fifo":         practises_fifo,
-                    "checks_expiry":          checks_expiry,
-                    "segregates_thermolabile": segregates_thermolabile,
-                    "fda_inspected":          1 if fda_inspected == "Yes" else 0,
-                    "self_compliance_rating": self_compliance_rating,
-                    "observed_degradation":   1 if observed_degradation == "Yes" else 0,
-                    "degradation_drug_types": ", ".join(degradation_drug_types),
-                    "observed_color_change":  1 if observed_color_change == "Yes" else 0,
-                    "potency_complaints":     1 if potency_complaints == "Yes" else 0,
-                    "returned_stock_quality": 1 if returned_stock_quality == "Yes" else 0,
-                    "num_quality_incidents":  num_quality_incidents,
-                    "biggest_challenge":      biggest_challenge,
-                    "support_needed":         support_needed,
-                    "policy_recommendation":  policy_recommendation.strip(),
-                    "additional_comments":    additional_comments.strip(),
+                data={
+                    "submitted_at":datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "pharmacy_name":pharmacy_name.strip(),"pharmacist_name":pharmacist_name.strip(),
+                    "pharmacist_email":pharmacist_email.strip(),"reg_number":reg_number.strip(),
+                    "years_experience":int(years_experience),"pharmacy_type":pharmacy_type,
+                    "num_staff":int(num_staff),"location_type":location_type,
+                    "has_ac":1 if has_ac=="Yes" else 0,"has_refrigerator":1 if has_refrigerator=="Yes" else 0,
+                    "has_thermometer":1 if has_thermometer=="Yes" else 0,"has_hygrometer":1 if has_hygrometer=="Yes" else 0,
+                    "has_proper_shelving":1 if has_proper_shelving=="Yes" else 0,"has_ventilation":1 if has_ventilation=="Yes" else 0,
+                    "has_direct_sunlight":1 if has_direct_sunlight=="Yes" else 0,"storage_area_size":storage_area_size,
+                    "temp_monitoring_freq":temp_monitoring_freq,"usual_temp_range":usual_temp_range,
+                    "usual_humidity_range":usual_humidity_range,"temp_excursion_action":temp_excursion_action,
+                    "has_written_sop":1 if has_written_sop=="Yes" else 0,
+                    "gsp_training_received":1 if gsp_training_received=="Yes" else 0,
+                    "last_training_year":last_training_year,"practises_fifo":practises_fifo,
+                    "checks_expiry":checks_expiry,"segregates_thermolabile":segregates_thermolabile,
+                    "fda_inspected":1 if fda_inspected=="Yes" else 0,"self_compliance_rating":self_compliance_rating,
+                    "observed_degradation":1 if observed_degradation=="Yes" else 0,
+                    "degradation_drug_types":", ".join(degradation_drug_types),
+                    "observed_color_change":1 if observed_color_change=="Yes" else 0,
+                    "potency_complaints":1 if potency_complaints=="Yes" else 0,
+                    "returned_stock_quality":1 if returned_stock_quality=="Yes" else 0,
+                    "num_quality_incidents":num_quality_incidents,"biggest_challenge":biggest_challenge,
+                    "support_needed":support_needed,"policy_recommendation":policy_recommendation.strip(),
+                    "additional_comments":additional_comments.strip(),
                 }
-                ok = insert_response(data)
-                if ok:
+                if insert_response(data):
                     st.markdown("""
                     <div class="success-box">
-                        <h2>✅ Response Submitted Successfully!</h2>
-                        <p style="color:#065A82; font-size:1.05em;">
-                            Thank you for completing this survey.<br>
-                            Your contribution is vital to improving drug storage practices
-                            and patient safety in the Sunyani Municipality.
-                        </p>
-                        <p style="font-size:0.82em; color:#888; margin-top:12px;">
-                            Sunyani Technical University — Department of Pharmacy, 2026
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                      <div style="font-size:3em;">✅</div>
+                      <h2 style="color:#028090;margin:10px 0;">Response Submitted Successfully!</h2>
+                      <p style="color:#065A82;font-size:1.05em;">
+                        Thank you for completing this survey.<br>
+                        Your contribution is vital to improving drug storage practices
+                        and patient safety in the Sunyani Municipality.
+                      </p>
+                      <p style="font-size:.82em;color:#888;margin-top:14px;">
+                        Sunyani Technical University — Department of Pharmacy, 2026
+                      </p>
+                    </div>""",unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────
+# ════════════════════════════════════════════════════════
 # PAGE: DASHBOARD
-# ─────────────────────────────────────────────
+# ════════════════════════════════════════════════════════
 def page_dashboard():
-    df = fetch_all()
-
+    df=fetch_all()
     if df.empty:
-        st.warning("📭 No survey responses yet. Share the survey link with pharmacists to collect data.")
+        st.warning("📭 No survey responses yet. Share the survey link with pharmacists.")
         return
+    df=prep_df(df); n=len(df)
 
-    # Ensure numeric types
-    bool_cols = ["has_ac","has_refrigerator","has_thermometer","has_hygrometer",
-                 "has_proper_shelving","has_ventilation","has_direct_sunlight",
-                 "has_written_sop","gsp_training_received","fda_inspected",
-                 "observed_degradation","observed_color_change","potency_complaints",
-                 "returned_stock_quality"]
-    for c in bool_cols:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
-
-    n = len(df)
-
-    # ── KPI TILES ──────────────────────────────────────────────
-    st.markdown("### 📈 Research Summary — Key Metrics")
-    cols = st.columns(6)
-    kpis = [
-        ("Total Responses",        str(n)),
-        ("Have Air Conditioning",  f"{df['has_ac'].mean()*100:.0f}%"),
-        ("Have Thermometer",       f"{df['has_thermometer'].mean()*100:.0f}%"),
-        ("GSP Trained",            f"{df['gsp_training_received'].mean()*100:.0f}%"),
-        ("Observed Degradation",   f"{df['observed_degradation'].mean()*100:.0f}%"),
-        ("Have Written SOP",       f"{df['has_written_sop'].mean()*100:.0f}%"),
+    # ── KPI Row ──────────────────────────────────────────
+    st.markdown("### 📈 Key Performance Indicators")
+    c1,c2,c3,c4,c5,c6=st.columns(6)
+    kpis=[
+        (c1,str(n),"Total Responses",""),
+        (c2,f"{df['has_ac'].mean()*100:.0f}%","Have Air Conditioning","kpi-coral" if df['has_ac'].mean()<.7 else "kpi-green"),
+        (c3,f"{df['has_thermometer'].mean()*100:.0f}%","Have Thermometer","kpi-coral" if df['has_thermometer'].mean()<.7 else "kpi-green"),
+        (c4,f"{df['gsp_training_received'].mean()*100:.0f}%","GSP Trained","kpi-gold"),
+        (c5,f"{df['observed_degradation'].mean()*100:.0f}%","Drug Degradation","kpi-coral"),
+        (c6,f"{df['has_written_sop'].mean()*100:.0f}%","Have Written SOP","kpi-navy"),
     ]
-    for col, (label, val) in zip(cols, kpis):
+    for col,val,label,cls in kpis:
         with col:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-value">{val}</div>
-                <div class="metric-label">{label}</div>
-            </div>""", unsafe_allow_html=True)
+            st.markdown(f'<div class="kpi-card {cls}"><div class="kpi-value">{val}</div>'
+                        f'<div class="kpi-label">{label}</div></div>',unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown('<hr class="section-divider">',unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════
-    # CHART 1: Horizontal Bar — Equipment Availability
-    # ══════════════════════════════════════════
-    col1, col2 = st.columns(2)
-    with col1:
-        labels = ["Air Conditioning","Refrigerator","Thermometer",
-                  "Hygrometer","Proper Shelving","Ventilation"]
-        keys   = ["has_ac","has_refrigerator","has_thermometer",
-                  "has_hygrometer","has_proper_shelving","has_ventilation"]
-        vals   = [round(df[k].mean()*100, 1) for k in keys]
-        colors = [GREEN if v >= 70 else CORAL for v in vals]
+    # ══ SECTION 1: Infrastructure ══════════════════════
+    st.markdown("## 🏗️ Section 1 — Storage Infrastructure")
+    c1,c2=st.columns(2)
+    with c1:
+        labels=["Air Conditioning","Refrigerator","Thermometer","Hygrometer","Proper Shelving","Ventilation"]
+        keys  =["has_ac","has_refrigerator","has_thermometer","has_hygrometer","has_proper_shelving","has_ventilation"]
+        vals  =[round(df[k].mean()*100,1) for k in keys]
+        colors=[GREEN if v>=70 else CORAL for v in vals]
+        fig=go.Figure(go.Bar(y=labels,x=vals,orientation='h',
+            marker=dict(color=colors,line=dict(width=0)),
+            text=[f"  {v}%" for v in vals],textposition='outside',
+            textfont=dict(size=12,color="#333"),
+            hovertemplate='<b>%{y}</b><br>%{x:.1f}% of pharmacies<extra></extra>'))
+        fig.add_vline(x=70,line_dash="dot",line_color=NAVY,line_width=2.5,
+            annotation_text=" 70% Benchmark",annotation_position="top right",
+            annotation_font=dict(size=11,color=NAVY))
+        apply_layout(fig,"Storage Equipment Availability","Green ≥70% adequate | Red <70% critical gap",
+            height=380,xaxis=dict(range=[0,125],title="% of Pharmacies"),yaxis_title="")
+        insight("Red bars show critical equipment gaps — each is a direct risk to drug potency and patient safety.")
+    with c2:
+        sz=df["storage_area_size"].value_counts().reset_index(); sz.columns=["Size","Count"]
+        fig2=go.Figure(go.Pie(labels=sz["Size"],values=sz["Count"],hole=.45,
+            marker=dict(colors=PAL,line=dict(color="white",width=3)),
+            textinfo='percent+label',textfont_size=12,pull=[.03]*len(sz),
+            hovertemplate='<b>%{label}</b><br>%{value} pharmacies (%{percent})<extra></extra>'))
+        apply_layout(fig2,"Pharmacy Storage Area Sizes","Distribution of drug storage space",
+            height=380,showlegend=False)
+        fig2.update_xaxes(visible=False); fig2.update_yaxes(visible=False)
+        insight("Small storage areas increase risk of improper stacking, poor ventilation and cross-contamination.")
 
-        fig = go.Figure(go.Bar(
-            x=vals, y=labels, orientation='h',
-            marker_color=colors,
-            text=[f"{v}%" for v in vals], textposition='outside',
-            hovertemplate='%{y}: %{x:.1f}%<extra></extra>'
-        ))
-        fig.add_vline(x=70, line_dash="dash", line_color=NAVY, line_width=2,
-                      annotation_text="70% Benchmark", annotation_position="top right",
-                      annotation_font_size=11)
-        fig.update_layout(
-            title=dict(text="📦 Storage Equipment Availability<br><sup>Green ≥70% adequate | Red = below benchmark</sup>", font_size=14),
-            xaxis=dict(title="% of Pharmacies", range=[0,118]),
-            yaxis_title="", height=390,
-            margin=dict(l=10, r=20, t=85, b=20),
-            plot_bgcolor="white", paper_bgcolor="white"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("🔑 Red bars indicate critical compliance gaps that directly risk drug quality.")
+    c1,c2=st.columns(2)
+    with c1:
+        pt=df["pharmacy_type"].value_counts().reset_index(); pt.columns=["Type","Count"]
+        pct=(pt["Count"]/n*100).round(1)
+        fig3=go.Figure(go.Bar(x=pt["Type"],y=pt["Count"],
+            marker=dict(color=PAL[:len(pt)],line=dict(width=0)),
+            text=[f"{c}<br>({p}%)" for c,p in zip(pt["Count"],pct)],textposition='outside',
+            hovertemplate='<b>%{x}</b><br>%{y} pharmacies<extra></extra>'))
+        apply_layout(fig3,"Pharmacy Types Surveyed","Breakdown by licence category",
+            height=360,xaxis_title="Pharmacy Type",yaxis_title="Count",xaxis_tickangle=-15)
+        insight("Retail community pharmacies form the majority — reflecting their dominance in Sunyani Municipality.")
+    with c2:
+        lt=df["location_type"].value_counts().reset_index(); lt.columns=["Location","Count"]
+        pct_l=(lt["Count"]/n*100).round(1)
+        cl=[TEAL if "Urban" in l else AMBER if "Peri" in l else CORAL for l in lt["Location"]]
+        fig4=go.Figure(go.Bar(x=lt["Location"],y=lt["Count"],
+            marker=dict(color=cl,line=dict(width=0)),
+            text=[f"{c}<br>({p}%)" for c,p in zip(lt["Count"],pct_l)],textposition='outside',
+            hovertemplate='<b>%{x}</b><br>%{y} pharmacies<extra></extra>'))
+        apply_layout(fig4,"Pharmacy Location Distribution","Urban vs peri-urban vs rural representation",
+            height=360,xaxis_title="Location Type",yaxis_title="Count")
+        insight("Rural pharmacies face greater infrastructure challenges — even small rural samples matter for equity analysis.")
 
-    # ══════════════════════════════════════════
-    # CHART 2: Donut — Temperature Ranges
-    # ══════════════════════════════════════════
-    with col2:
-        temp_short = {
-            "Below 25°C  (WHO Optimal)":    "< 25°C ✅ Optimal",
-            "25°C – 30°C  (Acceptable)":    "25–30°C ⚠️ Acceptable",
-            "30°C – 35°C  (Risk Zone)":     "30–35°C 🔶 Risk Zone",
-            "Above 35°C  (High Risk)":      "> 35°C 🔴 High Risk",
-            "Not monitored / Unknown":       "Unknown"
-        }
-        df["temp_label"] = df["usual_temp_range"].map(temp_short).fillna(df["usual_temp_range"])
-        tc = df["temp_label"].value_counts().reset_index()
-        tc.columns = ["Range","Count"]
+    st.markdown('<hr class="section-divider">',unsafe_allow_html=True)
 
-        fig2 = px.pie(tc, values="Count", names="Range", hole=0.44,
-                      color_discrete_sequence=[GREEN, TEAL, GOLD, CORAL, SLATE])
-        fig2.update_traces(
-            textinfo='percent+label',
-            hovertemplate='%{label}: %{value} pharmacies (%{percent})<extra></extra>'
-        )
-        fig2.update_layout(
-            title=dict(text="🌡️ Usual Temperature in Storage Areas<br><sup>WHO recommends ≤25–30°C for most medicines</sup>", font_size=14),
-            showlegend=False, height=390,
-            margin=dict(l=10, r=10, t=85, b=10),
-            paper_bgcolor="white"
-        )
-        st.plotly_chart(fig2, use_container_width=True)
-        st.caption("🔑 Pharmacies in orange/red segments store drugs above recommended limits, accelerating degradation.")
+    # ══ SECTION 2: Temperature & Humidity ══════════════
+    st.markdown("## 🌡️ Section 2 — Temperature & Humidity Conditions")
+    c1,c2=st.columns(2)
+    with c1:
+        tmap={"Below 25°C  (WHO Optimal)":"<25°C ✅ Optimal","25°C – 30°C  (Acceptable)":"25-30°C ⚠️ Acceptable",
+              "30°C – 35°C  (Risk Zone)":"30-35°C 🔶 Risk Zone","Above 35°C  (High Risk)":">35°C 🔴 High Risk","Not monitored / Unknown":"Unknown"}
+        df["tlbl"]=df["usual_temp_range"].map(tmap).fillna(df["usual_temp_range"])
+        tc=df["tlbl"].value_counts().reset_index(); tc.columns=["Range","Count"]
+        tcol=[GREEN if "Optimal" in r else TEAL if "Acceptable" in r else GOLD if "Risk Zone" in r else CORAL if "High Risk" in r else SLATE for r in tc["Range"]]
+        fig5=go.Figure(go.Pie(labels=tc["Range"],values=tc["Count"],hole=.50,
+            marker=dict(colors=tcol,line=dict(color="white",width=3)),
+            textinfo='percent+label',textfont_size=12,pull=[.04]*len(tc),
+            hovertemplate='<b>%{label}</b><br>%{value} pharmacies (%{percent})<extra></extra>'))
+        apply_layout(fig5,"Usual Temperature in Storage Areas","WHO recommends ≤25-30°C for most medicines",
+            height=400,showlegend=False)
+        fig5.update_xaxes(visible=False); fig5.update_yaxes(visible=False)
+        insight("Orange and red segments = pharmacies above WHO safe limits — drugs face accelerated chemical degradation.")
+    with c2:
+        hmap={"Below 45% RH  (Low)":"<45% RH (Low)","45% – 65% RH  (Optimal)":"45-65% ✅ Optimal",
+              "65% – 75% RH  (Elevated Risk)":"65-75% ⚠️ Elevated","Above 75% RH  (High Risk)":">75% 🔴 High Risk","Not monitored / Unknown":"Unknown"}
+        df["hlbl"]=df["usual_humidity_range"].map(hmap).fillna(df["usual_humidity_range"])
+        hc=df["hlbl"].value_counts().reset_index(); hc.columns=["Humidity","Count"]
+        hcol=[GREEN if "Optimal" in r else GOLD if "Elevated" in r else CORAL if "High" in r else SLATE for r in hc["Humidity"]]
+        fig6=go.Figure(go.Pie(labels=hc["Humidity"],values=hc["Count"],hole=0,
+            marker=dict(colors=hcol,line=dict(color="white",width=3)),
+            textinfo='percent+label',textfont_size=12,
+            hovertemplate='<b>%{label}</b><br>%{value} pharmacies (%{percent})<extra></extra>'))
+        apply_layout(fig6,"Relative Humidity in Storage Areas","Optimal range: 45-65% RH",
+            height=400,showlegend=False)
+        fig6.update_xaxes(visible=False); fig6.update_yaxes(visible=False)
+        insight("High humidity (>65% RH) accelerates moisture-induced degradation in antibiotics and oral tablets.")
 
-    # ══════════════════════════════════════════
-    # CHART 3: Stacked Bar — GSP Compliance
-    # ══════════════════════════════════════════
-    col1, col2 = st.columns(2)
-    with col1:
-        clabels  = ["GSP Training","Written SOP","FIFO Rotation",
-                    "Expiry Checks","Thermolabile Segregation","FDA Inspected"]
-        yes_pcts = [
-            df["gsp_training_received"].mean()*100,
-            df["has_written_sop"].mean()*100,
-            (df["practises_fifo"]=="Yes").mean()*100,
-            (df["checks_expiry"]=="Yes").mean()*100,
-            (df["segregates_thermolabile"]=="Yes").mean()*100,
-            df["fda_inspected"].mean()*100,
-        ]
-        no_pcts = [100-v for v in yes_pcts]
-
-        fig3 = go.Figure()
-        fig3.add_trace(go.Bar(name="Compliant ✅", x=clabels, y=yes_pcts, marker_color=GREEN,
-                              text=[f"{v:.0f}%" for v in yes_pcts], textposition='inside',
-                              hovertemplate='%{x}<br>Compliant: %{y:.1f}%<extra></extra>'))
-        fig3.add_trace(go.Bar(name="Non-compliant ❌", x=clabels, y=no_pcts, marker_color=CORAL,
-                              text=[f"{v:.0f}%" for v in no_pcts], textposition='inside',
-                              hovertemplate='%{x}<br>Non-compliant: %{y:.1f}%<extra></extra>'))
-        fig3.update_layout(
-            barmode='stack',
-            title=dict(text="✅ WHO Good Storage Practice (GSP) Compliance<br><sup>Green=Compliant | Red=Non-compliant</sup>", font_size=14),
-            yaxis_title="% of Pharmacies", xaxis_tickangle=-20, height=400,
-            margin=dict(l=20, r=20, t=85, b=90),
-            legend=dict(orientation='h', yanchor='bottom', y=-0.38),
-            plot_bgcolor="white", paper_bgcolor="white"
-        )
-        st.plotly_chart(fig3, use_container_width=True)
-        st.caption("🔑 Large red segments reveal which GSP practices are most neglected.")
-
-    # ══════════════════════════════════════════
-    # CHART 4: Pie — Humidity Ranges
-    # ══════════════════════════════════════════
-    with col2:
-        hum_short = {
-            "Below 45% RH  (Low)":           "< 45% RH (Low)",
-            "45% – 65% RH  (Optimal)":       "45–65% ✅ Optimal",
-            "65% – 75% RH  (Elevated Risk)": "65–75% ⚠️ Elevated",
-            "Above 75% RH  (High Risk)":     "> 75% 🔴 High Risk",
-            "Not monitored / Unknown":        "Unknown"
-        }
-        df["hum_label"] = df["usual_humidity_range"].map(hum_short).fillna(df["usual_humidity_range"])
-        hc = df["hum_label"].value_counts().reset_index()
-        hc.columns = ["Humidity","Count"]
-
-        fig4 = px.pie(hc, values="Count", names="Humidity", hole=0,
-                      color_discrete_sequence=[TEAL, GREEN, GOLD, CORAL, SLATE])
-        fig4.update_traces(
-            textinfo='percent+label',
-            hovertemplate='%{label}: %{value} pharmacies (%{percent})<extra></extra>'
-        )
-        fig4.update_layout(
-            title=dict(text="💧 Relative Humidity in Storage Areas<br><sup>Optimal: 45–65% RH</sup>", font_size=14),
-            showlegend=False, height=400,
-            margin=dict(l=10, r=10, t=85, b=10),
-            paper_bgcolor="white"
-        )
-        st.plotly_chart(fig4, use_container_width=True)
-        st.caption("🔑 High humidity (>65% RH) accelerates moisture-induced degradation in antibiotics and oral solids.")
-
-    # ══════════════════════════════════════════
-    # CHART 5: Radar — Drug Quality Risk Profile
-    # ══════════════════════════════════════════
-    col1, col2 = st.columns(2)
-    with col1:
-        cats  = ["Degradation Observed","Colour Changes","Potency Complaints",
-                 "Returned Stock","No SOP","No Thermometer"]
-        rvals = [
-            df["observed_degradation"].mean()*100,
-            df["observed_color_change"].mean()*100,
-            df["potency_complaints"].mean()*100,
-            df["returned_stock_quality"].mean()*100,
-            (1-df["has_written_sop"].mean())*100,
-            (1-df["has_thermometer"].mean())*100,
-        ]
-        fig5 = go.Figure(go.Scatterpolar(
-            r=rvals+[rvals[0]], theta=cats+[cats[0]], fill='toself',
-            fillcolor="rgba(249,97,103,0.20)", line=dict(color=CORAL, width=2.5),
-            hovertemplate='%{theta}: %{r:.1f}%<extra></extra>'
-        ))
-        fig5.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0,100], ticksuffix="%", tickfont_size=10)),
-            title=dict(text="🕸️ Drug Quality Risk Profile<br><sup>Larger area = broader systemic risk</sup>", font_size=14),
-            height=410, showlegend=False,
-            margin=dict(l=60, r=60, t=85, b=60),
-            paper_bgcolor="white"
-        )
-        st.plotly_chart(fig5, use_container_width=True)
-        st.caption("🔑 Points near the outer edge signal critical problems requiring urgent attention.")
-
-    # ══════════════════════════════════════════
-    # CHART 6: Bar — Self-Rated Compliance
-    # ══════════════════════════════════════════
-    with col2:
-        order = ["Very Poor","Poor","Fair","Good","Excellent"]
-        rc = df["self_compliance_rating"].value_counts().reindex(order, fill_value=0).reset_index()
-        rc.columns = ["Rating","Count"]
-        pct = (rc["Count"]/n*100).round(1)
-        c_map = {"Very Poor":CORAL,"Poor":AMBER,"Fair":GOLD,"Good":TEAL,"Excellent":GREEN}
-        bcolors = [c_map[r] for r in rc["Rating"]]
-
-        fig6 = go.Figure(go.Bar(
-            x=rc["Rating"], y=rc["Count"],
-            marker_color=bcolors,
-            text=[f"{c}<br>({p}%)" for c,p in zip(rc["Count"],pct)],
-            textposition='outside',
-            hovertemplate='%{x}: %{y} pharmacies<extra></extra>'
-        ))
-        fig6.update_layout(
-            title=dict(text="🌟 Pharmacists' Self-Rated GSP Compliance<br><sup>Self-perception vs objective data</sup>", font_size=14),
-            xaxis_title="Rating", yaxis_title="Number of Pharmacies",
-            height=410, margin=dict(l=20, r=20, t=85, b=20),
-            plot_bgcolor="white", paper_bgcolor="white"
-        )
-        st.plotly_chart(fig6, use_container_width=True)
-        st.caption("🔑 Compare self-perception with objective charts to identify knowledge and awareness gaps.")
-
-    # ══════════════════════════════════════════
-    # CHART 7: Line — Cumulative Submissions Over Time
-    # ══════════════════════════════════════════
-    col1, col2 = st.columns(2)
-    with col1:
+    c1,c2=st.columns(2)
+    with c1:
+        fmap={"Multiple times daily":"Multiple/Day","Once daily":"Once Daily","Weekly":"Weekly","Monthly":"Monthly","Never monitored":"Never"}
+        ford=["Multiple/Day","Once Daily","Weekly","Monthly","Never"]
+        fcol=[GREEN,GREEN,GOLD,AMBER,CORAL]
+        df["fshort"]=df["temp_monitoring_freq"].map(fmap).fillna(df["temp_monitoring_freq"])
+        fc=df["fshort"].value_counts().reindex(ford,fill_value=0).reset_index(); fc.columns=["Frequency","Count"]
+        fig7=go.Figure(go.Bar(x=fc["Frequency"],y=fc["Count"],
+            marker=dict(color=fcol,line=dict(width=0)),
+            text=fc["Count"],textposition='outside',textfont_size=13,
+            hovertemplate='<b>%{x}</b><br>%{y} pharmacies<extra></extra>'))
+        apply_layout(fig7,"Temperature Monitoring Frequency","WHO GSP requires minimum once-daily recording",
+            height=360,xaxis_title="Monitoring Frequency",yaxis_title="Pharmacies")
+        insight("'Weekly', 'Monthly' or 'Never' monitors cannot detect dangerous temperature excursions in time.")
+    with c2:
         if "submitted_at" in df.columns:
-            df["submitted_dt"] = pd.to_datetime(df["submitted_at"], errors="coerce")
-            daily = df.dropna(subset=["submitted_dt"]).groupby(df["submitted_dt"].dt.date).size().reset_index()
-            daily.columns = ["Date","Count"]
-            daily = daily.sort_values("Date")
-            daily["Cumulative"] = daily["Count"].cumsum()
+            df["sdt"]=pd.to_datetime(df["submitted_at"],errors="coerce")
+            daily=df.dropna(subset=["sdt"]).groupby(df["sdt"].dt.date).size().reset_index()
+            daily.columns=["Date","Count"]; daily=daily.sort_values("Date")
+            daily["Cumulative"]=daily["Count"].cumsum()
+            fig8=go.Figure()
+            fig8.add_trace(go.Bar(x=daily["Date"],y=daily["Count"],name="Daily",
+                marker_color=MINT,opacity=.7,hovertemplate='<b>%{x}</b><br>%{y} new responses<extra></extra>'))
+            fig8.add_trace(go.Scatter(x=daily["Date"],y=daily["Cumulative"],name="Cumulative",
+                mode='lines+markers',line=dict(color=TEAL,width=3),
+                marker=dict(size=9,color=GREEN,line=dict(width=2,color=NAVY)),
+                hovertemplate='<b>%{x}</b><br>Total: %{y} responses<extra></extra>'))
+            apply_layout(fig8,"Survey Submission Trend Over Time","Daily (bars) and cumulative total (line)",
+                height=360,xaxis_title="Date",yaxis_title="Responses",
+                legend=dict(orientation='h',y=-.25))
+            insight("This trend tracks data collection progress — useful for reporting fieldwork timeline in thesis methodology.")
 
-            fig7 = go.Figure()
-            fig7.add_trace(go.Scatter(
-                x=daily["Date"], y=daily["Cumulative"],
-                mode='lines+markers',
-                line=dict(color=TEAL, width=3),
-                marker=dict(size=8, color=GREEN, line=dict(width=2, color=NAVY)),
-                fill='tozeroy', fillcolor="rgba(2,128,144,0.12)",
-                hovertemplate='%{x}: %{y} total responses<extra></extra>',
-                name="Cumulative"
-            ))
-            fig7.add_trace(go.Bar(
-                x=daily["Date"], y=daily["Count"],
-                marker_color=MINT, opacity=0.6,
-                name="Daily", hovertemplate='%{x}: %{y} new<extra></extra>'
-            ))
-            fig7.update_layout(
-                title=dict(text="📅 Survey Submission Trend<br><sup>Daily count and cumulative total</sup>", font_size=14),
-                xaxis_title="Date", yaxis_title="Responses",
-                height=390, margin=dict(l=20, r=20, t=85, b=40),
-                plot_bgcolor="white", paper_bgcolor="white",
-                legend=dict(orientation='h', yanchor='bottom', y=-0.3)
-            )
-            st.plotly_chart(fig7, use_container_width=True)
-            st.caption("🔑 Tracks data collection momentum — useful for fieldwork monitoring and methodology documentation.")
+    st.markdown('<hr class="section-divider">',unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════
-    # CHART 8: Bar — Temperature Monitoring Frequency
-    # ══════════════════════════════════════════
-    with col2:
-        freq_map = {
-            "Multiple times daily":"Multiple/Day ✅",
-            "Once daily":"Once Daily ✅",
-            "Weekly":"Weekly ⚠️",
-            "Monthly":"Monthly ⚠️",
-            "Never monitored":"Never 🔴"
-        }
-        freq_order = ["Multiple/Day ✅","Once Daily ✅","Weekly ⚠️","Monthly ⚠️","Never 🔴"]
-        df["freq_short"] = df["temp_monitoring_freq"].map(freq_map).fillna(df["temp_monitoring_freq"])
-        fc = df["freq_short"].value_counts().reindex(freq_order, fill_value=0).reset_index()
-        fc.columns = ["Frequency","Count"]
-        f_colors = [GREEN, GREEN, GOLD, AMBER, CORAL]
+    # ══ SECTION 3: GSP Compliance ══════════════════════
+    st.markdown("## ✅ Section 3 — WHO Good Storage Practice (GSP) Compliance")
+    c1,c2=st.columns(2)
+    with c1:
+        clbl=["GSP Training","Written SOP","FIFO","Expiry Checks","Cold Chain","FDA Inspected"]
+        yp=[df["gsp_training_received"].mean()*100,df["has_written_sop"].mean()*100,
+            (df["practises_fifo"]=="Yes").mean()*100,(df["checks_expiry"]=="Yes").mean()*100,
+            (df["segregates_thermolabile"]=="Yes").mean()*100,df["fda_inspected"].mean()*100]
+        np_=[100-v for v in yp]
+        fig9=go.Figure()
+        fig9.add_trace(go.Bar(name="✅ Compliant",x=clbl,y=yp,marker=dict(color=GREEN,line=dict(width=0)),
+            text=[f"{v:.0f}%" for v in yp],textposition='inside',insidetextanchor='middle',
+            textfont=dict(color="white",size=12)))
+        fig9.add_trace(go.Bar(name="❌ Non-compliant",x=clbl,y=np_,marker=dict(color=CORAL,line=dict(width=0)),
+            text=[f"{v:.0f}%" for v in np_],textposition='inside',insidetextanchor='middle',
+            textfont=dict(color="white",size=12)))
+        apply_layout(fig9,"WHO GSP Compliance Across All Indicators","Green=compliant | Red=non-compliant",
+            height=420,barmode='stack',xaxis_tickangle=-15,
+            yaxis=dict(title="% of Pharmacies",range=[0,100]),
+            legend=dict(orientation='h',y=-.28))
+        insight("Large red segments show which GSP practices are most neglected — priority areas for training and enforcement.")
+    with c2:
+        cats=["Degradation\nObserved","Colour\nChanges","Potency\nComplaints","Returned\nStock","No Written\nSOP","No\nThermometer"]
+        rv=[df["observed_degradation"].mean()*100,df["observed_color_change"].mean()*100,
+            df["potency_complaints"].mean()*100,df["returned_stock_quality"].mean()*100,
+            (1-df["has_written_sop"].mean())*100,(1-df["has_thermometer"].mean())*100]
+        fig10=go.Figure(go.Scatterpolar(r=rv+[rv[0]],theta=cats+[cats[0]],fill='toself',
+            fillcolor="rgba(249,97,103,.18)",line=dict(color=CORAL,width=3),
+            marker=dict(size=8,color=CORAL),
+            hovertemplate='<b>%{theta}</b><br>%{r:.1f}% of pharmacies<extra></extra>'))
+        fig10.update_layout(**LAYOUT_BASE,
+            polar=dict(radialaxis=dict(visible=True,range=[0,100],ticksuffix="%",
+                tickfont=dict(size=10),gridcolor="#eee"),
+                angularaxis=dict(tickfont=dict(size=11))),
+            title=dict(text="<b>Drug Quality Risk Profile</b><br>"
+                "<sup style='color:#666'>Larger shaded area = broader systemic risk</sup>",
+                font=dict(size=15,color="#065A82"),x=.01),
+            height=420,showlegend=False)
+        insight("A large shaded area means risk is widespread across multiple dimensions — not just one isolated problem.")
 
-        fig8 = go.Figure(go.Bar(
-            x=fc["Frequency"], y=fc["Count"],
-            marker_color=f_colors,
-            text=fc["Count"], textposition='outside',
-            hovertemplate='%{x}: %{y} pharmacies<extra></extra>'
-        ))
-        fig8.update_layout(
-            title=dict(text="🕐 Temperature Monitoring Frequency<br><sup>WHO GSP requires minimum once-daily recording</sup>", font_size=14),
-            xaxis_title="Monitoring Frequency", yaxis_title="Number of Pharmacies",
-            height=390, margin=dict(l=20, r=20, t=85, b=20),
-            plot_bgcolor="white", paper_bgcolor="white"
-        )
-        st.plotly_chart(fig8, use_container_width=True)
-        st.caption("🔑 Infrequent or absent monitoring means temperature excursions go undetected, silently degrading potency.")
+    c1,c2=st.columns(2)
+    with c1:
+        order=["Very Poor","Poor","Fair","Good","Excellent"]
+        rc=df["self_compliance_rating"].value_counts().reindex(order,fill_value=0).reset_index(); rc.columns=["Rating","Count"]
+        pct_rc=(rc["Count"]/n*100).round(1)
+        cmap={"Very Poor":CORAL,"Poor":AMBER,"Fair":GOLD,"Good":TEAL,"Excellent":GREEN}
+        fig11=go.Figure(go.Bar(x=rc["Rating"],y=rc["Count"],
+            marker=dict(color=[cmap[r] for r in rc["Rating"]],line=dict(width=0)),
+            text=[f"{c} ({p}%)" for c,p in zip(rc["Count"],pct_rc)],
+            textposition='outside',textfont_size=12,
+            hovertemplate='<b>%{x}</b><br>%{y} pharmacies<extra></extra>'))
+        apply_layout(fig11,"Pharmacists' Self-Rated GSP Compliance","Self-perception vs objective compliance data",
+            height=380,xaxis_title="Self-Rating",yaxis_title="Count")
+        insight("Compare this self-perception with the objective stacked bar — a large gap indicates overconfidence and training need.")
+    with c2:
+        rnum={"Very Poor":1,"Poor":2,"Fair":3,"Good":4,"Excellent":5}
+        df["cnum"]=df["self_compliance_rating"].map(rnum)
+        sdf=df.dropna(subset=["years_experience","cnum"])
+        fig12=px.scatter(sdf,x="years_experience",y="cnum",color="pharmacy_type",
+            color_discrete_sequence=PAL,
+            labels={"years_experience":"Years of Experience","cnum":"Compliance Rating","pharmacy_type":"Type"},
+            hover_data={"pharmacy_name":True,"self_compliance_rating":True,"years_experience":True},
+            trendline="ols",trendline_scope="overall",trendline_color_override=NAVY)
+        fig12.update_traces(marker=dict(size=10,opacity=.8,line=dict(width=1,color="white")))
+        apply_layout(fig12,"Experience vs Self-Rated GSP Compliance","Each dot = one pharmacy | Navy = overall trend",
+            height=380,xaxis_title="Years of Experience",
+            yaxis=dict(title="Compliance (1=Very Poor, 5=Excellent)",
+                tickvals=[1,2,3,4,5],ticktext=["Very Poor","Poor","Fair","Good","Excellent"]),
+            legend=dict(orientation='h',y=-.28))
+        insight("The trend line shows if experienced pharmacists rate themselves higher — relevant for experience-based training design.")
 
-    # ══════════════════════════════════════════
-    # CHART 9: Funnel — Drug Quality Incidents
-    # ══════════════════════════════════════════
-    col1, col2 = st.columns(2)
-    with col1:
-        inc_order = ["None","1 – 3","4 – 6","7 – 10","More than 10"]
-        ic = df["num_quality_incidents"].value_counts().reindex(inc_order, fill_value=0).reset_index()
-        ic.columns = ["Incidents","Count"]
+    st.markdown('<hr class="section-divider">',unsafe_allow_html=True)
 
-        fig9 = go.Figure(go.Funnel(
-            y=ic["Incidents"], x=ic["Count"],
-            textinfo="value+percent initial",
-            marker=dict(color=[GREEN, TEAL, GOLD, AMBER, CORAL]),
-            connector=dict(line=dict(color=NAVY, width=1.5)),
-            hovertemplate='%{y}: %{x} pharmacies<extra></extra>'
-        ))
-        fig9.update_layout(
-            title=dict(text="🔻 Drug Quality Incidents — Last 12 Months<br><sup>Funnel shows proportion of pharmacies per incident band</sup>", font_size=14),
-            height=400, margin=dict(l=20, r=20, t=85, b=20),
-            paper_bgcolor="white"
-        )
-        st.plotly_chart(fig9, use_container_width=True)
-        st.caption("🔑 Higher incident bands signal systemic storage failures requiring urgent regulatory attention.")
+    # ══ SECTION 4: Drug Quality ═════════════════════════
+    st.markdown("## ⚠️ Section 4 — Observed Drug Quality Issues")
+    c1,c2=st.columns(2)
+    with c1:
+        inc_ord=["None","1 – 3","4 – 6","7 – 10","More than 10"]
+        ic=df["num_quality_incidents"].value_counts().reindex(inc_ord,fill_value=0).reset_index(); ic.columns=["Incidents","Count"]
+        fig13=go.Figure(go.Funnel(y=ic["Incidents"],x=ic["Count"],
+            textinfo="value+percent initial",textfont=dict(size=13),
+            marker=dict(color=[GREEN,TEAL,GOLD,AMBER,CORAL],line=dict(color=["white"]*5,width=2)),
+            connector=dict(line=dict(color="#ddd",width=1)),
+            hovertemplate='<b>%{y}</b><br>%{x} pharmacies<extra></extra>'))
+        apply_layout(fig13,"Drug Quality Incidents — Last 12 Months","Pharmacies reporting each incident frequency band",height=400)
+        fig13.update_xaxes(visible=False); fig13.update_yaxes(visible=False)
+        insight("Pharmacies reporting 4+ incidents per year signal systemic storage failures needing urgent regulatory follow-up.")
+    with c2:
+        qk=["observed_degradation","observed_color_change","potency_complaints","returned_stock_quality"]
+        ql=["Degradation","Colour Change","Potency Complaints","Returned Stock"]
+        types=df["pharmacy_type"].dropna().unique().tolist()
+        fig14=go.Figure()
+        for i,pt_ in enumerate(types):
+            sub=df[df["pharmacy_type"]==pt_]
+            v14=[round(sub[k].mean()*100,1) for k in qk]
+            fig14.add_trace(go.Bar(name=pt_,x=ql,y=v14,
+                marker=dict(color=PAL[i%len(PAL)],line=dict(width=0)),
+                text=[f"{v}%" for v in v14],textposition='outside',
+                hovertemplate=f'<b>{pt_}</b><br>%{{x}}: %{{y}}%<extra></extra>'))
+        apply_layout(fig14,"Drug Quality Issues by Pharmacy Type","% of each type reporting each quality problem",
+            height=400,barmode='group',xaxis_title="Quality Indicator",yaxis_title="% Reporting",
+            legend=dict(orientation='h',y=-.28))
+        insight("Comparing quality issue rates across pharmacy types identifies which category needs the most regulatory attention.")
 
-    # ══════════════════════════════════════════
-    # CHART 10: Scatter — Experience vs Compliance
-    # ══════════════════════════════════════════
-    with col2:
-        rating_num = {"Very Poor":1,"Poor":2,"Fair":3,"Good":4,"Excellent":5}
-        df["compliance_num"] = df["self_compliance_rating"].map(rating_num)
-        scatter_df = df.dropna(subset=["years_experience","compliance_num"])
+    c1,c2=st.columns(2)
+    with c1:
+        atypes=[]
+        for row in df["degradation_drug_types"].dropna():
+            atypes.extend([t.strip() for t in str(row).split(",") if t.strip()])
+        if atypes:
+            tc_=Counter(atypes)
+            tdf=pd.DataFrame(tc_.items(),columns=["Drug Type","Count"]).sort_values("Count",ascending=True)
+            fig15=go.Figure(go.Bar(y=tdf["Drug Type"],x=tdf["Count"],orientation='h',
+                marker=dict(color=CORAL,opacity=.85,line=dict(width=0)),
+                text=tdf["Count"],textposition='outside',
+                hovertemplate='<b>%{y}</b><br>%{x} pharmacies<extra></extra>'))
+            apply_layout(fig15,"Most Affected Drug Categories (Degradation)","Drug types most frequently observed to degrade",
+                height=380,xaxis_title="Number of Reports",yaxis_title="")
+            insight("The top drug categories need priority attention in cold chain management and storage guidelines.")
+        else:
+            st.info("No drug type degradation data recorded yet.")
+    with c2:
+        ek2=["has_ac","has_refrigerator","has_thermometer","has_hygrometer","has_proper_shelving","has_ventilation"]
+        el2=["AC","Fridge","Thermometer","Hygrometer","Shelving","Ventilation"]
+        locs=df["location_type"].dropna().unique().tolist()
+        if locs:
+            hmr=[[round(df[df["location_type"]==loc][k].mean()*100,1) for k in ek2] for loc in locs]
+            fig16=go.Figure(go.Heatmap(z=hmr,x=el2,y=locs,
+                colorscale=[[0,CORAL],[.5,GOLD],[1,GREEN]],
+                text=[[f"{v}%" for v in row] for row in hmr],
+                texttemplate="%{text}",textfont=dict(size=13),
+                hovertemplate='<b>%{y}</b> — <b>%{x}</b>: %{z:.1f}%<extra></extra>',
+                colorbar=dict(title="% with equipment",ticksuffix="%")))
+            apply_layout(fig16,"Equipment Availability by Location Type","Green=high availability | Red=critical gap",height=380)
+            insight("Rural pharmacies in red cells are the most underserved — supports equity-based policy recommendations.")
 
-        fig10 = px.scatter(
-            scatter_df, x="years_experience", y="compliance_num",
-            color="pharmacy_type",
-            color_discrete_sequence=[TEAL, GREEN, CORAL, GOLD, NAVY],
-            labels={"years_experience":"Years of Experience","compliance_num":"Compliance Rating (1–5)","pharmacy_type":"Type"},
-            hover_data=["pharmacy_name","self_compliance_rating"],
-            trendline="ols"
-        )
-        fig10.update_layout(
-            title=dict(text="🔬 Experience vs Self-Rated GSP Compliance<br><sup>Scatter with trend line per pharmacy type</sup>", font_size=14),
-            yaxis=dict(tickvals=[1,2,3,4,5], ticktext=["Very Poor","Poor","Fair","Good","Excellent"]),
-            height=400, margin=dict(l=20, r=20, t=85, b=20),
-            plot_bgcolor="white", paper_bgcolor="white"
-        )
-        st.plotly_chart(fig10, use_container_width=True)
-        st.caption("🔑 Reveals whether more experienced pharmacists self-report higher compliance — useful for training policy.")
+    st.markdown('<hr class="section-divider">',unsafe_allow_html=True)
 
-    # ══════════════════════════════════════════
-    # CHART 11 & 12: Pie charts — Challenges & Support
-    # ══════════════════════════════════════════
-    st.markdown("### 🚧 Identified Barriers & Support Needs")
-    col1, col2 = st.columns(2)
+    # ══ SECTION 5: Barriers ════════════════════════════
+    st.markdown("## 🚧 Section 5 — Challenges & Support Needs")
+    c1,c2=st.columns(2)
+    with c1:
+        csh={"Frequent power outages / erratic electricity supply":"Power Outages",
+             "High cost of air conditioning or refrigeration":"High Equipment Cost",
+             "Small or inadequate storage space":"Inadequate Space",
+             "Lack of temperature/humidity monitoring equipment":"No Monitoring Equipment",
+             "Limited training and awareness on GSP":"Limited GSP Training",
+             "Insufficient regulatory inspection and enforcement":"Weak Regulation",
+             "Financial constraints to upgrade facilities":"Financial Constraints"}
+        df["cshort"]=df["biggest_challenge"].map(csh).fillna(df["biggest_challenge"])
+        ch=df["cshort"].value_counts().sort_values(ascending=True).reset_index(); ch.columns=["Challenge","Count"]
+        pct_ch=(ch["Count"]/n*100).round(1)
+        fig17=go.Figure(go.Bar(y=ch["Challenge"],x=ch["Count"],orientation='h',
+            marker=dict(color=ch["Count"],colorscale=[[0,MINT],[.5,TEAL],[1,NAVY]],
+                line=dict(width=0),showscale=False),
+            text=[f"{c} ({p}%)" for c,p in zip(ch["Count"],pct_ch)],textposition='outside',
+            hovertemplate='<b>%{y}</b><br>%{x} pharmacies<extra></extra>'))
+        apply_layout(fig17,"Biggest Challenges to Proper Drug Storage","Ranked by number of pharmacies citing each barrier",
+            height=400,xaxis_title="Number of Pharmacies",yaxis_title="")
+        insight("The longest bar identifies the single most critical barrier — this should be the first policy intervention priority.")
+    with c2:
+        ssh={"Subsidised air conditioning and refrigeration equipment":"Subsidised Equipment",
+             "Regular GSP training workshops":"GSP Training","Affordable data loggers or thermometers":"Affordable Monitoring",
+             "More frequent FDA inspections and guidance":"More FDA Inspections",
+             "Financial support / grants for facility upgrades":"Financial Grants",
+             "National policy changes and stricter enforcement":"Policy Reform"}
+        df["sshort"]=df["support_needed"].map(ssh).fillna(df["support_needed"])
+        sp=df["sshort"].value_counts().reset_index(); sp.columns=["Support","Count"]
+        fig18=go.Figure(go.Pie(labels=sp["Support"],values=sp["Count"],hole=.42,
+            marker=dict(colors=PAL,line=dict(color="white",width=3)),
+            textinfo='percent+label',textfont_size=12,pull=[.04]*len(sp),
+            hovertemplate='<b>%{label}</b><br>%{value} pharmacies (%{percent})<extra></extra>'))
+        apply_layout(fig18,"Type of Support Most Needed","What pharmacists say would most improve storage quality",
+            height=400,showlegend=False)
+        fig18.update_xaxes(visible=False); fig18.update_yaxes(visible=False)
+        insight("The dominant segment shows where investment would have the greatest impact on drug storage quality.")
 
-    with col1:
-        ch_short = {
-            "Frequent power outages / erratic electricity supply":  "Power Outages",
-            "High cost of air conditioning or refrigeration":        "High Equipment Cost",
-            "Small or inadequate storage space":                     "Inadequate Space",
-            "Lack of temperature/humidity monitoring equipment":     "No Monitoring Equipment",
-            "Limited training and awareness on GSP":                 "Limited GSP Training",
-            "Insufficient regulatory inspection and enforcement":    "Weak Regulation",
-            "Financial constraints to upgrade facilities":           "Financial Constraints"
-        }
-        df["chall_short"] = df["biggest_challenge"].map(ch_short).fillna(df["biggest_challenge"])
-        ch = df["chall_short"].value_counts().sort_values().reset_index()
-        ch.columns = ["Challenge","Count"]
-
-        fig11 = px.bar(ch, x="Count", y="Challenge", orientation='h',
-                       color="Count",
-                       color_continuous_scale=[[0,MINT],[0.5,TEAL],[1,NAVY]],
-                       text="Count")
-        fig11.update_traces(textposition='outside',
-                            hovertemplate='%{y}: %{x} pharmacies<extra></extra>')
-        fig11.update_layout(
-            title=dict(text="🚧 Biggest Challenges to Proper Drug Storage<br><sup>As reported by pharmacists</sup>", font_size=14),
-            showlegend=False, coloraxis_showscale=False,
-            xaxis_title="Number of Pharmacies", yaxis_title="",
-            height=400, margin=dict(l=10, r=30, t=85, b=20),
-            plot_bgcolor="white", paper_bgcolor="white"
-        )
-        st.plotly_chart(fig11, use_container_width=True)
-        st.caption("🔑 Longest bars identify most common barriers — essential for targeted policy and infrastructure interventions.")
-
-    with col2:
-        sup_short = {
-            "Subsidised air conditioning and refrigeration equipment": "Subsidised Equipment",
-            "Regular GSP training workshops":                          "GSP Training Workshops",
-            "Affordable data loggers or thermometers":                 "Affordable Monitoring Tools",
-            "More frequent FDA inspections and guidance":              "More FDA Inspections",
-            "Financial support / grants for facility upgrades":        "Financial Grants",
-            "National policy changes and stricter enforcement":        "Policy & Enforcement Reform"
-        }
-        df["sup_short"] = df["support_needed"].map(sup_short).fillna(df["support_needed"])
-        sp = df["sup_short"].value_counts().reset_index()
-        sp.columns = ["Support","Count"]
-
-        fig12 = px.pie(sp, values="Count", names="Support", hole=0.40,
-                       color_discrete_sequence=[TEAL, GREEN, NAVY, CORAL, GOLD, SLATE])
-        fig12.update_traces(
-            textinfo='percent+label',
-            hovertemplate='%{label}: %{value} pharmacies (%{percent})<extra></extra>'
-        )
-        fig12.update_layout(
-            title=dict(text="🤝 Type of Support Most Needed<br><sup>Pharmacists' top requested interventions</sup>", font_size=14),
-            showlegend=False, height=400,
-            margin=dict(l=10, r=10, t=85, b=10),
-            paper_bgcolor="white"
-        )
-        st.plotly_chart(fig12, use_container_width=True)
-        st.caption("🔑 Dominant segments reveal what pharmacists believe would most improve storage quality.")
-
-    # ══════════════════════════════════════════
-    # CHART 13: Heatmap — Location × Equipment
-    # ══════════════════════════════════════════
-    st.markdown("### 🗺️ Geographic & Facility Cross-Analysis")
-    equip_keys   = ["has_ac","has_refrigerator","has_thermometer","has_hygrometer",
-                    "has_proper_shelving","has_ventilation"]
-    equip_labels = ["AC","Refrigerator","Thermometer","Hygrometer","Shelving","Ventilation"]
-
-    hm_rows = []
-    for loc in df["location_type"].dropna().unique():
-        sub = df[df["location_type"]==loc]
-        hm_rows.append([round(sub[k].mean()*100,1) for k in equip_keys])
-
-    locs = df["location_type"].dropna().unique().tolist()
-    if locs:
-        fig13 = go.Figure(go.Heatmap(
-            z=hm_rows, x=equip_labels, y=locs,
-            colorscale=[[0,CORAL],[0.5,GOLD],[1,GREEN]],
-            text=[[f"{v}%" for v in row] for row in hm_rows],
-            texttemplate="%{text}",
-            hovertemplate='%{y} — %{x}: %{z:.1f}%<extra></extra>',
-            colorbar=dict(title="% with equipment")
-        ))
-        fig13.update_layout(
-            title=dict(text="🗺️ Equipment Availability by Location Type<br><sup>Green = high availability | Red = low</sup>", font_size=14),
-            height=350, margin=dict(l=20, r=20, t=85, b=20),
-            paper_bgcolor="white"
-        )
-        st.plotly_chart(fig13, use_container_width=True)
-        st.caption("🔑 Rural pharmacies typically show lower equipment coverage — highlights geographic equity gaps in drug storage infrastructure.")
-
-    # ══════════════════════════════════════════
-    # CHART 14: Grouped Bar — Pharmacy Type Analysis
-    # ══════════════════════════════════════════
-    qual_indicators = ["observed_degradation","observed_color_change","potency_complaints","returned_stock_quality"]
-    qual_labels     = ["Degradation","Colour Change","Potency Complaints","Returned Stock"]
-    types = df["pharmacy_type"].dropna().unique().tolist()
-
-    if types:
-        fig14 = go.Figure()
-        palette = [TEAL, GREEN, CORAL, GOLD, NAVY, AMBER]
-        for i, ptype in enumerate(types):
-            sub = df[df["pharmacy_type"]==ptype]
-            vals14 = [round(sub[k].mean()*100,1) for k in qual_indicators]
-            fig14.add_trace(go.Bar(
-                name=ptype, x=qual_labels, y=vals14,
-                marker_color=palette[i % len(palette)],
-                text=[f"{v}%" for v in vals14], textposition='outside',
-                hovertemplate=f'{ptype}<br>%{{x}}: %{{y}}%<extra></extra>'
-            ))
-        fig14.update_layout(
-            barmode='group',
-            title=dict(text="🏥 Drug Quality Issues by Pharmacy Type<br><sup>Grouped bar showing % reporting each issue</sup>", font_size=14),
-            yaxis_title="% Reporting Issue", xaxis_title="Quality Indicator",
-            height=430, margin=dict(l=20, r=20, t=85, b=20),
-            plot_bgcolor="white", paper_bgcolor="white",
-            legend=dict(orientation='h', yanchor='bottom', y=-0.35)
-        )
-        st.plotly_chart(fig14, use_container_width=True)
-        st.caption("🔑 Compares drug quality problem rates across pharmacy types — informs type-specific regulatory interventions.")
-
-
-# ─────────────────────────────────────────────
-# PAGE: RESPONSES (Admin Only)
-# ─────────────────────────────────────────────
+# ════════════════════════════════════════════════════════
+# PAGE: RESPONSES (Admin)
+# ════════════════════════════════════════════════════════
 def page_responses():
-    if not require_admin():
-        return
-
-    df = fetch_all()
-    if df.empty:
-        st.info("📭 No responses submitted yet.")
-        return
-
-    st.markdown(f"### 📋 All Submitted Responses &nbsp; — &nbsp; {len(df)} total")
-
-    show_cols = ["id","submitted_at","pharmacy_name","pharmacist_name",
-                 "pharmacy_type","location_type","self_compliance_rating","observed_degradation"]
-    show_cols = [c for c in show_cols if c in df.columns]
-    show = df[show_cols].copy()
+    if not require_admin(): return
+    df=fetch_all()
+    if df.empty: st.info("📭 No responses submitted yet."); return
+    st.markdown(f"### 📋 All Submitted Responses — {len(df)} total")
+    sc=["id","submitted_at","pharmacy_name","pharmacist_name","pharmacy_type","location_type","self_compliance_rating","observed_degradation"]
+    sc=[c for c in sc if c in df.columns]
+    show=df[sc].copy()
     if "observed_degradation" in show.columns:
-        show["observed_degradation"] = show["observed_degradation"].map({1:"✅ Yes", 0:"❌ No"})
-    show.columns = ["ID","Submitted At","Pharmacy","Pharmacist",
-                    "Type","Location","Compliance Rating","Degradation?"][:len(show_cols)]
-    st.dataframe(show, use_container_width=True, hide_index=True)
-
+        show["observed_degradation"]=show["observed_degradation"].map({1:"✅ Yes",0:"❌ No"})
+    show.columns=["ID","Submitted At","Pharmacy","Pharmacist","Type","Location","Compliance","Degradation?"][:len(sc)]
+    st.dataframe(show,use_container_width=True,hide_index=True)
     st.markdown("---")
     st.markdown("#### 🔍 View or Delete a Response")
-    rid = st.number_input("Enter Response ID", min_value=1, step=1, key="rid_input")
-    c1, c2, _ = st.columns([1, 1, 4])
+    rid=st.number_input("Enter Response ID",min_value=1,step=1,key="rid_input")
+    c1,c2,_=st.columns([1,1,4])
     with c1:
         if st.button("👁️ View"):
-            row = df[df["id"] == rid]
-            if row.empty:
-                st.error(f"No response found with ID {rid}.")
+            row=df[df["id"]==rid]
+            if row.empty: st.error(f"No response with ID {rid}.")
             else:
-                r = row.iloc[0]
-                st.success(f"Showing details for **{r['pharmacy_name']}** — submitted {r['submitted_at']}")
-                st.json({k: str(v) for k, v in r.items() if k != "id"})
+                r=row.iloc[0]
+                st.success(f"Details for **{r['pharmacy_name']}** — {r['submitted_at']}")
+                st.json({k:str(v) for k,v in r.items() if k!="id"})
     with c2:
-        if st.button("🗑️ Delete", type="secondary"):
-            row = df[df["id"] == rid]
-            if row.empty:
-                st.error(f"No response found with ID {rid}.")
+        if st.button("🗑️ Delete",type="secondary"):
+            row=df[df["id"]==rid]
+            if row.empty: st.error(f"No response with ID {rid}.")
             else:
-                delete_response(int(rid))
-                st.success(f"Response ID {rid} deleted successfully.")
-                st.rerun()
-
+                delete_response(int(rid)); st.success(f"Response ID {rid} deleted."); st.rerun()
     st.markdown("---")
-    csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "⬇️ Download All Responses as CSV",
-        data=csv,
+    csv=df.to_csv(index=False).encode("utf-8")
+    st.download_button("⬇️ Download All Responses as CSV",data=csv,
         file_name=f"pharmacy_survey_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
+        mime="text/csv",use_container_width=True)
 
 
-# ─────────────────────────────────────────────
-# PAGE: THESIS REPORT (Admin Only)
-# ─────────────────────────────────────────────
-def page_report():
-    if not require_admin():
-        return
-
-    df = fetch_all()
-    if df.empty:
-        st.warning("📭 No data available. Submit responses first.")
-        return
-
-    bool_cols = ["has_ac","has_refrigerator","has_thermometer","has_hygrometer",
-                 "has_proper_shelving","has_ventilation","has_direct_sunlight",
-                 "has_written_sop","gsp_training_received","fda_inspected",
-                 "observed_degradation","observed_color_change","potency_complaints",
-                 "returned_stock_quality"]
-    for c in bool_cols:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
-
-    n = len(df)
-    now = datetime.now().strftime("%d %B %Y, %H:%M")
-
-    st.markdown(f"""
-    ## 📄 Thesis Research Report
-    **Generated:** {now} &nbsp;|&nbsp; **Total Responses:** {n}
-    ---
-    """)
-
-    # ── 1. Descriptive Summary ──────────────────────────────────
-    st.markdown("### 1. Descriptive Statistics — Respondent Profile")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("**Pharmacy Type Distribution**")
-        pt = df["pharmacy_type"].value_counts().reset_index()
-        pt.columns = ["Type","Count"]
-        pt["Percentage"] = (pt["Count"]/n*100).round(1).astype(str) + "%"
-        st.dataframe(pt, hide_index=True, use_container_width=True)
-    with col2:
-        st.markdown("**Location Distribution**")
-        lt = df["location_type"].value_counts().reset_index()
-        lt.columns = ["Location","Count"]
-        lt["Percentage"] = (lt["Count"]/n*100).round(1).astype(str) + "%"
-        st.dataframe(lt, hide_index=True, use_container_width=True)
-    with col3:
-        st.markdown("**Experience Summary**")
-        exp_stats = df["years_experience"].describe().round(1)
-        st.dataframe(exp_stats.reset_index().rename(columns={"index":"Stat","years_experience":"Years"}),
-                     hide_index=True, use_container_width=True)
-
-    # ── 2. Equipment & Infrastructure ──────────────────────────
-    st.markdown("### 2. Storage Infrastructure Analysis")
-    equip_keys = ["has_ac","has_refrigerator","has_thermometer","has_hygrometer",
-                  "has_proper_shelving","has_ventilation"]
-    equip_labels = ["Air Conditioning","Refrigerator","Thermometer",
-                    "Hygrometer","Proper Shelving","Ventilation"]
-    equip_df = pd.DataFrame({
-        "Equipment": equip_labels,
-        "Count with Equipment": [df[k].sum() for k in equip_keys],
-        "% of Pharmacies": [f"{df[k].mean()*100:.1f}%" for k in equip_keys],
-        "Status": ["✅ Adequate" if df[k].mean()*100 >= 70 else "❌ Below Benchmark" for k in equip_keys]
-    })
-    st.dataframe(equip_df, hide_index=True, use_container_width=True)
-
-    st.markdown(f"""
-    **Interpretation:** Only pharmacies with ≥70% equipment availability are considered adequately equipped.
-    Air conditioning is present in {df['has_ac'].mean()*100:.1f}% of sampled pharmacies, which is
-    {"above" if df['has_ac'].mean()*100 >= 70 else "**below**"} the 70% benchmark.
-    This has direct implications for maintaining WHO-recommended storage temperatures (≤25–30°C).
-    """)
-
-    # ── 3. Temperature & Humidity ───────────────────────────────
-    st.markdown("### 3. Temperature & Humidity Monitoring")
-    temp_risk = df[df["usual_temp_range"].isin(["30°C – 35°C  (Risk Zone)","Above 35°C  (High Risk)"])]
-    hum_risk  = df[df["usual_humidity_range"].isin(["65% – 75% RH  (Elevated Risk)","Above 75% RH  (High Risk)"])]
-    never_mon = df[df["temp_monitoring_freq"]=="Never monitored"]
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Pharmacies in Temp Risk Zone", f"{len(temp_risk)} ({len(temp_risk)/n*100:.1f}%)")
-    col2.metric("Pharmacies with Elevated Humidity", f"{len(hum_risk)} ({len(hum_risk)/n*100:.1f}%)")
-    col3.metric("Never Monitor Temperature", f"{len(never_mon)} ({len(never_mon)/n*100:.1f}%)")
-
-    st.markdown(f"""
-    **Finding:** {len(temp_risk)/n*100:.1f}% of pharmacies operate in temperature zones above WHO recommendations.
-    Combined with {len(never_mon)/n*100:.1f}% that never monitor temperature, a significant proportion of 
-    drug stock in the Sunyani Municipality is at risk of temperature-induced potency degradation.
-    """)
-
-    # ── 4. GSP Compliance ───────────────────────────────────────
-    st.markdown("### 4. WHO Good Storage Practice (GSP) Compliance")
-    gsp_data = {
-        "GSP Indicator": ["GSP Training Received","Written SOP Exists","FIFO Practised (Always)",
-                          "Expiry Checks Done (Always)","Thermolabile Drugs Segregated","FDA Inspected (2 yrs)"],
-        "Compliant (n)": [
-            int(df["gsp_training_received"].sum()),
-            int(df["has_written_sop"].sum()),
-            int((df["practises_fifo"]=="Yes").sum()),
-            int((df["checks_expiry"]=="Yes").sum()),
-            int((df["segregates_thermolabile"]=="Yes").sum()),
-            int(df["fda_inspected"].sum()),
-        ]
+# ════════════════════════════════════════════════════════
+# PDF GENERATOR
+# ════════════════════════════════════════════════════════
+def generate_pdf(df,n):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (SimpleDocTemplate,Paragraph,Spacer,Table,
+                                    TableStyle,PageBreak,HRFlowable)
+    from reportlab.lib.enums import TA_CENTER,TA_LEFT,TA_JUSTIFY
+    buf=BytesIO()
+    doc=SimpleDocTemplate(buf,pagesize=A4,leftMargin=2*cm,rightMargin=2*cm,topMargin=2.5*cm,bottomMargin=2*cm)
+    C_TEAL=colors.HexColor("#028090"); C_NAVY=colors.HexColor("#065A82")
+    C_GREEN=colors.HexColor("#02C39A"); C_CORAL=colors.HexColor("#F96167")
+    C_LITE=colors.HexColor("#e8f7fb"); C_GREY=colors.HexColor("#f5f5f5"); C_DARK=colors.HexColor("#222222")
+    sty={
+        "ct":ParagraphStyle("ct",fontSize=22,textColor=colors.white,alignment=TA_CENTER,fontName="Helvetica-Bold",leading=28),
+        "cs":ParagraphStyle("cs",fontSize=12,textColor=colors.white,alignment=TA_CENTER,fontName="Helvetica",leading=18),
+        "h1":ParagraphStyle("h1",fontSize=15,textColor=C_NAVY,fontName="Helvetica-Bold",spaceBefore=18,spaceAfter=8,leading=20),
+        "h2":ParagraphStyle("h2",fontSize=12,textColor=C_TEAL,fontName="Helvetica-Bold",spaceBefore=12,spaceAfter=6,leading=16),
+        "bd":ParagraphStyle("bd",fontSize=10,textColor=C_DARK,fontName="Helvetica",leading=15,spaceAfter=6,alignment=TA_JUSTIFY),
+        "bk":ParagraphStyle("bk",fontSize=10,textColor=C_DARK,fontName="Helvetica-Bold",leading=14,spaceAfter=4),
     }
-    gsp_df = pd.DataFrame(gsp_data)
-    gsp_df["% Compliant"] = (gsp_df["Compliant (n)"]/n*100).round(1).astype(str) + "%"
-    gsp_df["Non-compliant (n)"] = n - gsp_df["Compliant (n)"]
-    gsp_df["Compliance Level"] = gsp_df["Compliant (n)"].apply(
-        lambda x: "✅ Good" if x/n >= 0.7 else ("⚠️ Moderate" if x/n >= 0.4 else "❌ Poor")
-    )
-    st.dataframe(gsp_df, hide_index=True, use_container_width=True)
-
-    # ── 5. Drug Quality Outcomes ─────────────────────────────────
-    st.markdown("### 5. Observed Drug Quality & Potency Issues")
-    quality_data = {
-        "Quality Indicator": [
-            "Physical Degradation Observed",
-            "Unusual Colour Change Noted",
-            "Potency Complaints from Patients",
-            "Stock Returned/Discarded for Quality",
-        ],
-        "Yes (n)": [
-            int(df["observed_degradation"].sum()),
-            int(df["observed_color_change"].sum()),
-            int(df["potency_complaints"].sum()),
-            int(df["returned_stock_quality"].sum()),
-        ]
-    }
-    qual_df = pd.DataFrame(quality_data)
-    qual_df["% of Pharmacies"] = (qual_df["Yes (n)"]/n*100).round(1).astype(str) + "%"
-    qual_df["Research Implication"] = [
-        "Indicates active drug deterioration in storage",
-        "Suggests chemical/physical instability due to storage conditions",
-        "Patient-reported reduced efficacy — potential therapeutic failure",
-        "Economic loss and quality breach indicator"
+    def hr(): return HRFlowable(width="100%",thickness=1,color=C_TEAL,spaceAfter=10)
+    def sp(h=8): return Spacer(1,h)
+    def mtable(headers,rows,cw,hc=C_NAVY):
+        data=[[Paragraph(f"<b>{h}</b>",ParagraphStyle("th",fontSize=9,textColor=colors.white,
+            fontName="Helvetica-Bold",alignment=TA_CENTER)) for h in headers]]
+        for row in rows:
+            data.append([Paragraph(str(c),ParagraphStyle("td",fontSize=9,textColor=C_DARK,
+                fontName="Helvetica",leading=13)) for c in row])
+        t=Table(data,colWidths=cw,repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,0),hc),
+            ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,C_GREY]),
+            ('GRID',(0,0),(-1,-1),.5,colors.HexColor("#cccccc")),
+            ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+            ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),
+            ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),
+        ]))
+        return t
+    now=datetime.now().strftime("%d %B %Y")
+    story=[]
+    # Cover
+    story.append(sp(60))
+    cd=[[Paragraph("DRUG STORAGE CONDITIONS SURVEY",sty["ct"])],
+        [Paragraph("Research Report",sty["cs"])],[sp(10)],
+        [Paragraph("Evaluation of Storage Conditions of Drugs in Community<br/>Pharmacies and Their Influence on Drug Potency and<br/>Shelf Life in the Sunyani Municipality, Ghana",sty["cs"])],
+        [sp(20)],
+        [Paragraph(f"Total Responses Analysed: <b>{n}</b>",sty["cs"])],
+        [Paragraph(f"Report Generated: {now}",sty["cs"])],[sp(30)],
+        [Paragraph("Sunyani Technical University | Department of Pharmacy",sty["cs"])],
+        [Paragraph("Supervisor: Mrs. Lydia Sarfo Mainoo",sty["cs"])],
+        [Paragraph("Researchers: Obeng Theophilus · Yussif Asmau · Egawu Naomi",sty["cs"])],]
+    ct=Table(cd,colWidths=[17*cm])
+    ct.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),C_NAVY),
+        ('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6),
+        ('LEFTPADDING',(0,0),(-1,-1),20),('RIGHTPADDING',(0,0),(-1,-1),20)]))
+    story+=[ct,PageBreak()]
+    # Stats
+    ac_p=df['has_ac'].mean()*100; deg_p=df['observed_degradation'].mean()*100
+    gsp_p=df['gsp_training_received'].mean()*100; sop_p=df['has_written_sop'].mean()*100
+    fda_p=df['fda_inspected'].mean()*100; nev_p=(df['temp_monitoring_freq']=="Never monitored").mean()*100
+    # S1 Executive Summary
+    story+=[Paragraph("1. Executive Summary",sty["h1"]),hr()]
+    story.append(Paragraph(f"This report presents findings from a survey of <b>{n} community pharmacies</b> in "
+        f"the Sunyani Municipality, Ghana, conducted in 2026 by the Department of Pharmacy, Sunyani Technical University. "
+        f"The study evaluated drug storage conditions, WHO GSP compliance, and observed drug quality outcomes.",sty["bd"]))
+    story+=[sp(),Paragraph("Key findings at a glance:",sty["bk"]),sp(4)]
+    story.append(mtable(["Indicator","Value","Status"],[
+        ["Total pharmacies surveyed",str(n),"—"],
+        ["Have air conditioning",f"{ac_p:.1f}%","Below 70% benchmark" if ac_p<70 else "Above benchmark"],
+        ["GSP training received",f"{gsp_p:.1f}%","Training gap" if gsp_p<70 else "Adequate"],
+        ["Have written SOP",f"{sop_p:.1f}%","Procedural gap" if sop_p<70 else "Adequate"],
+        ["Observed drug degradation",f"{deg_p:.1f}%","Active quality risk"],
+        ["Never monitor temperature",f"{nev_p:.1f}%","Critical monitoring gap"],
+        ["FDA-inspected recently",f"{fda_p:.1f}%","Regulatory oversight"],
+    ],[8*cm,3*cm,6*cm]))
+    story+=[sp(10),PageBreak()]
+    # S2 Respondent Profile
+    story+=[Paragraph("2. Respondent Profile",sty["h1"]),hr()]
+    story.append(Paragraph("2.1 Pharmacy Type Distribution",sty["h2"]))
+    pt=df["pharmacy_type"].value_counts().reset_index(); pt.columns=["Type","Count"]
+    story.append(mtable(["Pharmacy Type","Count","Percentage"],
+        [[r["Type"],str(r["Count"]),f"{r['Count']/n*100:.1f}%"] for _,r in pt.iterrows()],[9*cm,3*cm,5*cm]))
+    story+=[sp(6),Paragraph("2.2 Location Distribution",sty["h2"])]
+    lt=df["location_type"].value_counts().reset_index(); lt.columns=["Location","Count"]
+    story.append(mtable(["Location","Count","Percentage"],
+        [[r["Location"],str(r["Count"]),f"{r['Count']/n*100:.1f}%"] for _,r in lt.iterrows()],[9*cm,3*cm,5*cm]))
+    story+=[sp(6),Paragraph("2.3 Years of Professional Experience",sty["h2"])]
+    exp=df["years_experience"].describe().round(1)
+    story.append(mtable(["Statistic","Value"],
+        [["Mean",f"{exp['mean']} yrs"],["Median",f"{exp['50%']} yrs"],
+         ["Min",f"{exp['min']} yrs"],["Max",f"{exp['max']} yrs"],
+         ["Std Dev",f"{exp['std']} yrs"]],[9*cm,8*cm]))
+    story+=[sp(10),PageBreak()]
+    # S3 Infrastructure
+    story+=[Paragraph("3. Storage Infrastructure Analysis",sty["h1"]),hr()]
+    story.append(Paragraph("Table 3.1 shows availability of key storage equipment. The 70% benchmark represents minimum adequate coverage.",sty["bd"]))
+    story.append(sp(6))
+    ek=["has_ac","has_refrigerator","has_thermometer","has_hygrometer","has_proper_shelving","has_ventilation"]
+    el=["Air Conditioning","Refrigerator","Thermometer","Hygrometer","Proper Shelving","Ventilation"]
+    story.append(mtable(["Equipment","Count","% of Pharmacies","Status"],
+        [[lbl,str(int(df[k].sum())),f"{df[k].mean()*100:.1f}%","Adequate" if df[k].mean()*100>=70 else "Below Benchmark"]
+         for k,lbl in zip(ek,el)],[6*cm,2.5*cm,3.5*cm,5*cm]))
+    story.append(Paragraph(f"<b>Interpretation:</b> Air conditioning is available in {ac_p:.1f}% of pharmacies surveyed — "
+        f"{'above' if ac_p>=70 else 'below'} the 70% benchmark. This directly affects the ability to maintain "
+        f"WHO-recommended storage temperatures (25-30°C).",sty["bd"]))
+    story+=[sp(10),PageBreak()]
+    # S4 Temperature
+    story+=[Paragraph("4. Temperature and Humidity Monitoring",sty["h1"]),hr()]
+    story.append(Paragraph("4.1 Temperature Range Distribution",sty["h2"]))
+    tm2={"Below 25°C  (WHO Optimal)":"Below 25C (WHO Optimal)","25°C – 30°C  (Acceptable)":"25-30C (Acceptable)",
+         "30°C – 35°C  (Risk Zone)":"30-35C (Risk Zone)","Above 35°C  (High Risk)":"Above 35C (High Risk)","Not monitored / Unknown":"Not Monitored"}
+    df["tl2"]=df["usual_temp_range"].map(tm2).fillna(df["usual_temp_range"])
+    tc2=df["tl2"].value_counts().reset_index(); tc2.columns=["Range","Count"]
+    story.append(mtable(["Temperature Range","Count","% of Pharmacies"],
+        [[r["Range"],str(r["Count"]),f"{r['Count']/n*100:.1f}%"] for _,r in tc2.iterrows()],[8*cm,3*cm,6*cm]))
+    trisk=df[df["usual_temp_range"].isin(["30°C – 35°C  (Risk Zone)","Above 35°C  (High Risk)"])]
+    nmon=df[df["temp_monitoring_freq"]=="Never monitored"]
+    story.append(Paragraph(f"<b>Finding:</b> {len(trisk)} pharmacies ({len(trisk)/n*100:.1f}%) operate above WHO-recommended temperature limits. "
+        f"Additionally, {len(nmon)} ({len(nmon)/n*100:.1f}%) never monitor temperature at all.",sty["bd"]))
+    story+=[sp(8),Paragraph("4.2 Humidity Range Distribution",sty["h2"])]
+    hm2={"Below 45% RH  (Low)":"Below 45% RH (Low)","45% – 65% RH  (Optimal)":"45-65% RH (Optimal)",
+         "65% – 75% RH  (Elevated Risk)":"65-75% RH (Elevated Risk)","Above 75% RH  (High Risk)":"Above 75% RH (High Risk)","Not monitored / Unknown":"Not Monitored"}
+    df["hl2"]=df["usual_humidity_range"].map(hm2).fillna(df["usual_humidity_range"])
+    hc2=df["hl2"].value_counts().reset_index(); hc2.columns=["Humidity","Count"]
+    story.append(mtable(["Humidity Range","Count","% of Pharmacies"],
+        [[r["Humidity"],str(r["Count"]),f"{r['Count']/n*100:.1f}%"] for _,r in hc2.iterrows()],[8*cm,3*cm,6*cm]))
+    hrisk=df[df["usual_humidity_range"].isin(["65% – 75% RH  (Elevated Risk)","Above 75% RH  (High Risk)"])]
+    story.append(Paragraph(f"<b>Finding:</b> {len(hrisk)} pharmacies ({len(hrisk)/n*100:.1f}%) reported humidity above 65% RH, "
+        f"accelerating moisture-induced degradation in oral tablets, capsules and antimalarials.",sty["bd"]))
+    story+=[sp(10),PageBreak()]
+    # S5 GSP
+    story+=[Paragraph("5. WHO Good Storage Practice (GSP) Compliance",sty["h1"]),hr()]
+    story.append(Paragraph("A compliance rate below 70% is classified as non-compliant at the population level.",sty["bd"]))
+    story.append(sp(6))
+    gsp_ind=[
+        ("GSP Training Received",df["gsp_training_received"].mean()*100,int(df["gsp_training_received"].sum())),
+        ("Written SOP Exists",df["has_written_sop"].mean()*100,int(df["has_written_sop"].sum())),
+        ("FIFO Practised (Always)",(df["practises_fifo"]=="Yes").mean()*100,int((df["practises_fifo"]=="Yes").sum())),
+        ("Expiry Checks (Always)",(df["checks_expiry"]=="Yes").mean()*100,int((df["checks_expiry"]=="Yes").sum())),
+        ("Cold Chain for Thermolabiles",(df["segregates_thermolabile"]=="Yes").mean()*100,int((df["segregates_thermolabile"]=="Yes").sum())),
+        ("FDA-Inspected (Last 2 Yrs)",df["fda_inspected"].mean()*100,int(df["fda_inspected"].sum())),
     ]
-    st.dataframe(qual_df, hide_index=True, use_container_width=True)
+    story.append(mtable(["GSP Indicator","Compliant (n)","Non-compliant (n)","% Compliant","Level"],
+        [[lbl,str(cnt),str(n-cnt),f"{pct:.1f}%","Good" if pct>=70 else ("Moderate" if pct>=40 else "Poor")]
+         for lbl,pct,cnt in gsp_ind],[6.5*cm,2.5*cm,2.8*cm,2.5*cm,2.7*cm]))
+    story+=[sp(10),PageBreak()]
+    # S6 Quality
+    story+=[Paragraph("6. Observed Drug Quality and Potency Issues",sty["h1"]),hr()]
+    story.append(mtable(["Quality Indicator","Yes (n)","No (n)","% Yes","Research Implication"],
+        [["Physical Drug Degradation Observed",str(int(df["observed_degradation"].sum())),str(n-int(df["observed_degradation"].sum())),
+          f"{df['observed_degradation'].mean()*100:.1f}%","Active drug deterioration in storage"],
+         ["Unusual Colour Change Noted",str(int(df["observed_color_change"].sum())),str(n-int(df["observed_color_change"].sum())),
+          f"{df['observed_color_change'].mean()*100:.1f}%","Chemical/physical instability"],
+         ["Patient Potency Complaints",str(int(df["potency_complaints"].sum())),str(n-int(df["potency_complaints"].sum())),
+          f"{df['potency_complaints'].mean()*100:.1f}%","Possible therapeutic failure"],
+         ["Stock Returned/Discarded",str(int(df["returned_stock_quality"].sum())),str(n-int(df["returned_stock_quality"].sum())),
+          f"{df['returned_stock_quality'].mean()*100:.1f}%","Economic loss indicator"],
+        ],[5.5*cm,1.8*cm,1.8*cm,1.8*cm,6.1*cm]))
+    a2=[]
+    for row in df["degradation_drug_types"].dropna():
+        a2.extend([t.strip() for t in str(row).split(",") if t.strip()])
+    if a2:
+        story+=[sp(8),Paragraph("6.1 Drug Categories Affected by Degradation",sty["h2"])]
+        tc_d=Counter(a2)
+        dr=sorted([[k,str(v),f"{v/n*100:.1f}%"] for k,v in tc_d.items()],key=lambda x:-int(x[1]))
+        story.append(mtable(["Drug Category","Reports","% of Pharmacies"],dr,[8*cm,3*cm,6*cm]))
+    story+=[sp(10),PageBreak()]
+    # S7 Key Findings
+    story+=[Paragraph("7. Summary of Key Research Findings",sty["h1"]),hr()]
+    finds=[
+        f"Only {ac_p:.1f}% of pharmacies have air conditioning — {'above' if ac_p>=70 else 'below'} the 70% benchmark.",
+        f"{gsp_p:.1f}% of pharmacists have received WHO GSP training, indicating a significant knowledge gap.",
+        f"Only {sop_p:.1f}% of pharmacies have a written Standard Operating Procedure for drug storage.",
+        f"{deg_p:.1f}% of pharmacies have observed physical signs of drug degradation.",
+        f"{df['potency_complaints'].mean()*100:.1f}% have received patient complaints about drug ineffectiveness.",
+        f"{nev_p:.1f}% of pharmacies never monitor storage temperature — the most critical monitoring failure.",
+        f"{fda_p:.1f}% have been inspected by FDA Ghana in the last 2 years.",
+        f"Top challenge: '{df['biggest_challenge'].mode()[0] if not df['biggest_challenge'].empty else 'N/A'}'.",
+        f"Top requested support: '{df['support_needed'].mode()[0] if not df['support_needed'].empty else 'N/A'}'.",
+    ]
+    for i,f_ in enumerate(finds,1):
+        story.append(Paragraph(f"{i}. {f_}",sty["bd"])); story.append(sp(3))
+    story+=[sp(10),PageBreak()]
+    # S8 Recommendations
+    story+=[Paragraph("8. Evidence-Based Policy Recommendations",sty["h1"]),hr()]
+    recs=[
+        ("Mandatory Temperature Monitoring Equipment",
+         "The FDA Ghana should require all licensed pharmacies to own calibrated thermometers and hygrometers "
+         "as a condition for annual operating licence renewal."),
+        ("Subsidised Air Conditioning Access",
+         f"Government and pharmaceutical associations should co-fund AC installation — particularly for the "
+         f"{100-ac_p:.0f}% of pharmacies currently without it."),
+        ("Compulsory Annual WHO GSP Training",
+         "The Pharmacy Council of Ghana should mandate annual GSP refresher training for all registered pharmacists, "
+         "with digital certification upon completion."),
+        ("Standardised SOP Templates",
+         "The Pharmacy Council should distribute standardised, ready-to-use drug storage SOPs freely to all community pharmacies."),
+        ("Risk-Based FDA Inspection Increase",
+         "A risk-stratified inspection schedule should prioritise rural and peri-urban pharmacies with known temperature or humidity challenges."),
+        ("Community Pharmacy Infrastructure Grants",
+         "The Ministry of Health should establish a dedicated grant programme for facility upgrades in resource-limited pharmacies."),
+    ]
+    for i,(title,body) in enumerate(recs,1):
+        story.append(Paragraph(f"{i}. {title}",sty["h2"]))
+        story.append(Paragraph(body,sty["bd"])); story.append(sp(4))
+    # S9 Verbatim
+    pr=df["policy_recommendation"].dropna()
+    pr=pr[pr.str.strip()!=""]
+    if not pr.empty:
+        story+=[sp(8),PageBreak(),Paragraph("9. Verbatim Policy Recommendations from Pharmacists",sty["h1"]),hr()]
+        story.append(Paragraph("The following were provided directly by survey respondents:",sty["bd"])); story.append(sp(6))
+        for i,rec in enumerate(pr[:20],1):
+            story.append(Paragraph(f"{i}. {rec}",sty["bd"])); story.append(sp(3))
+    # Footer
+    story+=[sp(20),hr(),
+        Paragraph("Report automatically generated by the Drug Storage Conditions Survey Platform",
+            ParagraphStyle("ft",fontSize=9,textColor=colors.grey,alignment=TA_CENTER)),
+        Paragraph(f"Sunyani Technical University — Department of Pharmacy — {now}",
+            ParagraphStyle("ft2",fontSize=9,textColor=colors.grey,alignment=TA_CENTER))]
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
 
-    if "degradation_drug_types" in df.columns:
-        all_types = []
-        for row in df["degradation_drug_types"].dropna():
-            all_types.extend([t.strip() for t in str(row).split(",") if t.strip()])
-        if all_types:
-            from collections import Counter
-            type_counts = Counter(all_types)
-            type_df = pd.DataFrame(type_counts.items(), columns=["Drug Type","Count"]).sort_values("Count", ascending=False)
-            st.markdown("**Drug categories most frequently affected by degradation:**")
-            st.dataframe(type_df, hide_index=True, use_container_width=True)
+# ════════════════════════════════════════════════════════
+# WORD GENERATOR
+# ════════════════════════════════════════════════════════
+def generate_word(df,n):
+    from docx import Document
+    from docx.shared import Pt,Cm,RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    doc=Document()
+    for sec in doc.sections:
+        sec.top_margin=Cm(2.5); sec.bottom_margin=Cm(2.0)
+        sec.left_margin=Cm(2.5); sec.right_margin=Cm(2.5)
+    def rgb(h):
+        h=h.lstrip("#"); return RGBColor(int(h[:2],16),int(h[2:4],16),int(h[4:],16))
+    def set_bg(cell,hx):
+        tc=cell._tc; tcPr=tc.get_or_add_tcPr()
+        shd=OxmlElement('w:shd'); shd.set(qn('w:val'),'clear')
+        shd.set(qn('w:color'),'auto'); shd.set(qn('w:fill'),hx.lstrip('#'))
+        tcPr.append(shd)
+    def head(text,level=1,color="065A82"):
+        p=doc.add_heading(text,level=level)
+        run=p.runs[0] if p.runs else p.add_run(text)
+        run.font.color.rgb=rgb(color); run.font.name="Calibri"
+        p.paragraph_format.space_before=Pt(14); p.paragraph_format.space_after=Pt(6)
+        return p
+    def body(text,bold=False,color=None,italic=False):
+        p=doc.add_paragraph(); run=p.add_run(text)
+        run.font.size=Pt(10.5); run.font.name="Calibri"
+        run.bold=bold; run.italic=italic
+        if color: run.font.color.rgb=rgb(color)
+        p.paragraph_format.space_after=Pt(4); p.paragraph_format.space_before=Pt(0)
+        return p
+    def add_table(headers,rows,cw,hc="065A82"):
+        t=doc.add_table(rows=1+len(rows),cols=len(headers)); t.style="Table Grid"
+        hr_=t.rows[0]
+        for i,h in enumerate(headers):
+            cell=hr_.cells[i]; cell.width=Cm(cw[i]); set_bg(cell,hc)
+            p=cell.paragraphs[0]; run=p.add_run(h)
+            run.bold=True; run.font.color.rgb=rgb("FFFFFF")
+            run.font.size=Pt(9.5); run.font.name="Calibri"
+            p.alignment=WD_ALIGN_PARAGRAPH.CENTER; cell.vertical_alignment=WD_ALIGN_VERTICAL.CENTER
+        for ri,row in enumerate(rows):
+            tr=t.rows[ri+1]; bg="F5F5F5" if ri%2==0 else "FFFFFF"
+            for ci,cv in enumerate(row):
+                cell=tr.cells[ci]; cell.width=Cm(cw[ci]); set_bg(cell,bg)
+                p=cell.paragraphs[0]; run=p.add_run(str(cv))
+                run.font.size=Pt(9.5); run.font.name="Calibri"
+                cell.vertical_alignment=WD_ALIGN_VERTICAL.CENTER
+        doc.add_paragraph(); return t
+    def add_hr():
+        p=doc.add_paragraph(); pPr=p._p.get_or_add_pPr()
+        pBdr=OxmlElement('w:pBdr'); bot=OxmlElement('w:bottom')
+        bot.set(qn('w:val'),'single'); bot.set(qn('w:sz'),'6'); bot.set(qn('w:color'),'028090')
+        pBdr.append(bot); pPr.append(pBdr); p.paragraph_format.space_after=Pt(6)
+    now=datetime.now().strftime("%d %B %Y")
+    ac_p=df['has_ac'].mean()*100; deg_p=df['observed_degradation'].mean()*100
+    gsp_p=df['gsp_training_received'].mean()*100; sop_p=df['has_written_sop'].mean()*100
+    fda_p=df['fda_inspected'].mean()*100; nev_p=(df['temp_monitoring_freq']=="Never monitored").mean()*100
+    # Cover
+    doc.add_paragraph()
+    tp=doc.add_paragraph(); tp.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    run=tp.add_run("DRUG STORAGE CONDITIONS SURVEY"); run.bold=True
+    run.font.size=Pt(22); run.font.name="Calibri"; run.font.color.rgb=rgb("028090")
+    sp2=doc.add_paragraph(); sp2.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    run2=sp2.add_run("Research Report — Department of Pharmacy")
+    run2.font.size=Pt(13); run2.font.name="Calibri"; run2.font.color.rgb=rgb("065A82")
+    doc.add_paragraph()
+    for line in ["Evaluation of Storage Conditions of Drugs in Community Pharmacies",
+        "and Their Influence on Drug Potency and Shelf Life","in the Sunyani Municipality, Ghana","",
+        f"Total Responses: {n}   |   Report Date: {now}","",
+        "Sunyani Technical University | Department of Pharmacy",
+        "Supervisor: Mrs. Lydia Sarfo Mainoo","Researchers: Obeng Theophilus · Yussif Asmau · Egawu Naomi"]:
+        p=doc.add_paragraph(line); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_after=Pt(2)
+        if p.runs: p.runs[0].font.name="Calibri"
+    doc.add_page_break()
+    # S1
+    head("1. Executive Summary"); add_hr()
+    body(f"This report presents findings from a survey of {n} community pharmacies in the Sunyani Municipality, Ghana, conducted in 2026 by the Department of Pharmacy, Sunyani Technical University.")
+    doc.add_paragraph()
+    add_table(["Indicator","Value","Status"],
+        [["Total pharmacies surveyed",str(n),"—"],
+         ["Have air conditioning",f"{ac_p:.1f}%","Below 70% benchmark" if ac_p<70 else "Above benchmark"],
+         ["GSP training received",f"{gsp_p:.1f}%","Training gap" if gsp_p<70 else "Adequate"],
+         ["Have written SOP",f"{sop_p:.1f}%","Procedural gap" if sop_p<70 else "Adequate"],
+         ["Observed drug degradation",f"{deg_p:.1f}%","Active quality risk"],
+         ["Never monitor temperature",f"{nev_p:.1f}%","Critical monitoring gap"],
+         ["FDA-inspected recently",f"{fda_p:.1f}%","Regulatory oversight"]],[9,3.5,5])
+    doc.add_page_break()
+    # S2
+    head("2. Respondent Profile"); add_hr()
+    head("2.1 Pharmacy Type Distribution",level=2,color="028090")
+    pt=df["pharmacy_type"].value_counts().reset_index(); pt.columns=["Type","Count"]
+    add_table(["Pharmacy Type","Count","Percentage"],
+        [[r["Type"],str(r["Count"]),f"{r['Count']/n*100:.1f}%"] for _,r in pt.iterrows()],[9,3,5.5])
+    head("2.2 Location Distribution",level=2,color="028090")
+    lt=df["location_type"].value_counts().reset_index(); lt.columns=["Location","Count"]
+    add_table(["Location","Count","Percentage"],
+        [[r["Location"],str(r["Count"]),f"{r['Count']/n*100:.1f}%"] for _,r in lt.iterrows()],[9,3,5.5])
+    head("2.3 Professional Experience",level=2,color="028090")
+    exp=df["years_experience"].describe().round(1)
+    add_table(["Statistic","Value"],[["Mean",f"{exp['mean']} years"],["Median",f"{exp['50%']} years"],
+        ["Min",f"{exp['min']} years"],["Max",f"{exp['max']} years"],["Std Dev",f"{exp['std']} years"]],[9,8.5])
+    doc.add_page_break()
+    # S3
+    head("3. Storage Infrastructure Analysis"); add_hr()
+    body("Table 3.1 shows availability of essential storage equipment. The 70% benchmark reflects minimum adequate coverage.")
+    doc.add_paragraph()
+    ek=["has_ac","has_refrigerator","has_thermometer","has_hygrometer","has_proper_shelving","has_ventilation"]
+    el=["Air Conditioning","Refrigerator","Thermometer","Hygrometer","Proper Shelving","Ventilation"]
+    add_table(["Equipment","Count","% of Pharmacies","Status"],
+        [[lbl,str(int(df[k].sum())),f"{df[k].mean()*100:.1f}%","Adequate" if df[k].mean()*100>=70 else "Below Benchmark"]
+         for k,lbl in zip(ek,el)],[5.5,2.5,3.5,6])
+    body(f"Air conditioning is present in {ac_p:.1f}% of pharmacies — {'above' if ac_p>=70 else 'below'} the 70% benchmark.",bold=False)
+    doc.add_page_break()
+    # S4
+    head("4. Temperature and Humidity Monitoring"); add_hr()
+    head("4.1 Temperature Ranges",level=2,color="028090")
+    tm2={"Below 25°C  (WHO Optimal)":"Below 25C (WHO Optimal)","25°C – 30°C  (Acceptable)":"25-30C (Acceptable)",
+         "30°C – 35°C  (Risk Zone)":"30-35C (Risk Zone)","Above 35°C  (High Risk)":"Above 35C (High Risk)","Not monitored / Unknown":"Not Monitored"}
+    df["tl2"]=df["usual_temp_range"].map(tm2).fillna(df["usual_temp_range"])
+    tc2=df["tl2"].value_counts().reset_index(); tc2.columns=["Range","Count"]
+    add_table(["Temperature Range","Count","% of Pharmacies"],
+        [[r["Range"],str(r["Count"]),f"{r['Count']/n*100:.1f}%"] for _,r in tc2.iterrows()],[8,3,6.5])
+    trisk=df[df["usual_temp_range"].isin(["30°C – 35°C  (Risk Zone)","Above 35°C  (High Risk)"])]
+    nmon=df[df["temp_monitoring_freq"]=="Never monitored"]
+    body(f"Finding: {len(trisk)} pharmacies ({len(trisk)/n*100:.1f}%) operate above WHO safe temperature limits. {len(nmon)} ({len(nmon)/n*100:.1f}%) never monitor temperature.")
+    head("4.2 Humidity Ranges",level=2,color="028090")
+    hm2={"Below 45% RH  (Low)":"Below 45% RH","45% – 65% RH  (Optimal)":"45-65% RH (Optimal)",
+         "65% – 75% RH  (Elevated Risk)":"65-75% RH (Elevated Risk)","Above 75% RH  (High Risk)":"Above 75% RH (High Risk)","Not monitored / Unknown":"Not Monitored"}
+    df["hl2"]=df["usual_humidity_range"].map(hm2).fillna(df["usual_humidity_range"])
+    hc2=df["hl2"].value_counts().reset_index(); hc2.columns=["Humidity","Count"]
+    add_table(["Humidity Range","Count","% of Pharmacies"],
+        [[r["Humidity"],str(r["Count"]),f"{r['Count']/n*100:.1f}%"] for _,r in hc2.iterrows()],[8,3,6.5])
+    doc.add_page_break()
+    # S5
+    head("5. WHO GSP Compliance"); add_hr()
+    gsp_ind=[
+        ("GSP Training Received",df["gsp_training_received"].mean()*100,int(df["gsp_training_received"].sum())),
+        ("Written SOP Exists",df["has_written_sop"].mean()*100,int(df["has_written_sop"].sum())),
+        ("FIFO Practised (Always)",(df["practises_fifo"]=="Yes").mean()*100,int((df["practises_fifo"]=="Yes").sum())),
+        ("Expiry Checks (Always)",(df["checks_expiry"]=="Yes").mean()*100,int((df["checks_expiry"]=="Yes").sum())),
+        ("Cold Chain for Thermolabiles",(df["segregates_thermolabile"]=="Yes").mean()*100,int((df["segregates_thermolabile"]=="Yes").sum())),
+        ("FDA-Inspected (2 Years)",df["fda_inspected"].mean()*100,int(df["fda_inspected"].sum())),
+    ]
+    add_table(["GSP Indicator","Compliant (n)","Non-compliant (n)","% Compliant","Level"],
+        [[lbl,str(cnt),str(n-cnt),f"{pct:.1f}%","Good" if pct>=70 else ("Moderate" if pct>=40 else "Poor")]
+         for lbl,pct,cnt in gsp_ind],[6,2.5,2.8,2.5,3.7])
+    doc.add_page_break()
+    # S6
+    head("6. Observed Drug Quality and Potency Issues"); add_hr()
+    add_table(["Indicator","Yes (n)","% Yes","Implication"],
+        [["Physical Degradation Observed",str(int(df["observed_degradation"].sum())),f"{df['observed_degradation'].mean()*100:.1f}%","Active deterioration in storage"],
+         ["Unusual Colour Change",str(int(df["observed_color_change"].sum())),f"{df['observed_color_change'].mean()*100:.1f}%","Chemical/physical instability"],
+         ["Patient Potency Complaints",str(int(df["potency_complaints"].sum())),f"{df['potency_complaints'].mean()*100:.1f}%","Possible therapeutic failure"],
+         ["Stock Returned/Discarded",str(int(df["returned_stock_quality"].sum())),f"{df['returned_stock_quality'].mean()*100:.1f}%","Economic loss indicator"]],[6,2,2.5,7])
+    a2=[]
+    for row in df["degradation_drug_types"].dropna():
+        a2.extend([t.strip() for t in str(row).split(",") if t.strip()])
+    if a2:
+        head("6.1 Drug Categories Affected",level=2,color="028090")
+        tc_d=Counter(a2)
+        dr=sorted([[k,str(v),f"{v/n*100:.1f}%"] for k,v in tc_d.items()],key=lambda x:-int(x[1]))
+        add_table(["Drug Category","Reports","% of Pharmacies"],dr,[8,3,6.5])
+    doc.add_page_break()
+    # S7
+    head("7. Key Research Findings"); add_hr()
+    finds=[f"Only {ac_p:.1f}% of pharmacies have air conditioning.",
+        f"{gsp_p:.1f}% of pharmacists have received WHO GSP training.",
+        f"Only {sop_p:.1f}% of pharmacies have a written drug storage SOP.",
+        f"{deg_p:.1f}% of pharmacies have observed physical drug degradation.",
+        f"{df['potency_complaints'].mean()*100:.1f}% have received patient potency complaints.",
+        f"{nev_p:.1f}% of pharmacies never monitor storage temperature.",
+        f"{fda_p:.1f}% have been FDA-inspected in the last 2 years."]
+    for i,f_ in enumerate(finds,1):
+        p=doc.add_paragraph(style="List Number"); run=p.add_run(f_)
+        run.font.size=Pt(10.5); run.font.name="Calibri"
+    doc.add_page_break()
+    # S8
+    head("8. Evidence-Based Policy Recommendations"); add_hr()
+    recs=[
+        ("Mandatory Temperature Monitoring Equipment","The FDA Ghana should require calibrated thermometers and hygrometers as a condition of annual licence renewal."),
+        ("Subsidised Air Conditioning Access",f"Government should co-fund AC installation, prioritising the {100-ac_p:.0f}% of pharmacies without it."),
+        ("Compulsory Annual WHO GSP Training","Mandate annual refresher training for all registered pharmacists through the Pharmacy Council."),
+        ("Standardised SOP Templates","Distribute ready-to-use drug storage SOPs freely to all community pharmacies."),
+        ("Risk-Based FDA Inspection Increase","Prioritise rural and peri-urban pharmacies with known temperature or humidity challenges."),
+        ("Community Pharmacy Infrastructure Grants","Ministry of Health should create a grant programme for facility upgrades in resource-limited pharmacies."),
+    ]
+    for i,(title,rec_body) in enumerate(recs,1):
+        head(f"{i}. {title}",level=2,color="028090"); body(rec_body)
+    pr=df["policy_recommendation"].dropna(); pr=pr[pr.str.strip()!=""]
+    if not pr.empty:
+        doc.add_page_break(); head("9. Verbatim Recommendations from Pharmacists"); add_hr()
+        body("The following were provided directly by survey respondents:"); doc.add_paragraph()
+        for i,rec in enumerate(pr[:20],1):
+            p=doc.add_paragraph(style="List Number"); run=p.add_run(rec)
+            run.font.size=Pt(10.5); run.font.name="Calibri"; run.font.color.rgb=rgb("065A82")
+    doc.add_paragraph(); add_hr()
+    fp=doc.add_paragraph(f"Report generated · Sunyani Technical University · Department of Pharmacy · {now}")
+    fp.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    if fp.runs: fp.runs[0].font.size=Pt(8.5); fp.runs[0].font.color.rgb=rgb("888888"); fp.runs[0].font.name="Calibri"
+    buf=BytesIO(); doc.save(buf); buf.seek(0); return buf.read()
 
-    # ── 6. Key Findings Summary ──────────────────────────────────
-    st.markdown("### 6. Key Research Findings")
-    st.markdown(f"""
-| # | Finding | Value | Implication |
-|---|---------|-------|-------------|
-| 1 | AC availability | {df['has_ac'].mean()*100:.1f}% | Suboptimal temperature control risk |
-| 2 | GSP trained pharmacists | {df['gsp_training_received'].mean()*100:.1f}% | Training gap requiring intervention |
-| 3 | Pharmacies with written SOP | {df['has_written_sop'].mean()*100:.1f}% | Procedural compliance deficit |
-| 4 | Observed drug degradation | {df['observed_degradation'].mean()*100:.1f}% | Active quality loss in community supply |
-| 5 | Potency complaints received | {df['potency_complaints'].mean()*100:.1f}% | Possible therapeutic failure burden |
-| 6 | Never monitor temperature | {(df['temp_monitoring_freq']=="Never monitored").mean()*100:.1f}% | Critical monitoring gap |
-| 7 | FDA inspected recently | {df['fda_inspected'].mean()*100:.1f}% | Regulatory oversight level |
-    """)
 
-    # ── 7. Recommendations ───────────────────────────────────────
-    st.markdown("### 7. Policy Recommendations")
-    st.markdown("""
-**Based on the survey data, the following evidence-based recommendations are proposed:**
-
-1. **Mandatory temperature monitoring equipment** — The FDA Ghana should require all licensed pharmacies to own and use calibrated thermometers and hygrometers as a condition for renewal of operating licenses.
-
-2. **Subsidised air conditioning access** — Government and pharmaceutical associations should partner to subsidise AC installation costs, especially for rural and peri-urban pharmacies where the risk is highest.
-
-3. **Annual WHO GSP refresher training** — Compulsory annual GSP training for registered pharmacists should be mandated by the Pharmacy Council of Ghana, with digital certification.
-
-4. **Standard Operating Procedure (SOP) templates** — The Pharmacy Council should distribute standardised drug storage SOPs that can be immediately adopted by community pharmacies.
-
-5. **Increased FDA inspection frequency** — Current inspection rates appear insufficient. Risk-based inspection scheduling (targeting pharmacies with known temperature risk) should be implemented.
-
-6. **Community pharmacy infrastructure grants** — The Ministry of Health should develop a dedicated grant programme for facility upgrades in resource-limited settings.
-    """)
-
-    # ── 8. Policy Recommendations from Respondents ──────────────
-    policy_responses = df["policy_recommendation"].dropna()
-    policy_responses = policy_responses[policy_responses.str.strip() != ""]
-    if not policy_responses.empty:
-        st.markdown("### 8. Verbatim Policy Recommendations from Pharmacists")
-        for i, rec in enumerate(policy_responses[:20], 1):
-            st.markdown(f"**{i}.** _{rec}_")
-
-    # ── Export button ─────────────────────────────────────────────
+# ════════════════════════════════════════════════════════
+# PAGE: REPORT (Admin)
+# ════════════════════════════════════════════════════════
+def page_report():
+    if not require_admin(): return
+    df=fetch_all()
+    if df.empty: st.warning("📭 No data available. Submit some responses first."); return
+    df=prep_df(df); n=len(df)
+    now=datetime.now().strftime("%d %B %Y, %H:%M")
+    st.markdown(f"## 📄 Thesis Research Report\n**Generated:** {now} &nbsp;|&nbsp; **Total Responses:** {n}\n---")
+    ac_p=df['has_ac'].mean()*100; deg_p=df['observed_degradation'].mean()*100; gsp_p=df['gsp_training_received'].mean()*100
+    sop_p=df['has_written_sop'].mean()*100; fda_p=df['fda_inspected'].mean()*100
+    nev_p=(df['temp_monitoring_freq']=="Never monitored").mean()*100
+    c1,c2,c3=st.columns(3)
+    c1.metric("Air Conditioning Coverage",f"{ac_p:.1f}%","below benchmark" if ac_p<70 else "above benchmark")
+    c2.metric("GSP Training Coverage",f"{gsp_p:.1f}%")
+    c3.metric("Drug Degradation Observed",f"{deg_p:.1f}%")
+    st.markdown("### 📥 Download Reports")
+    col1,col2,col3=st.columns(3)
+    with col1:
+        with st.spinner("Generating PDF..."):
+            try:
+                pb=generate_pdf(df.copy(),n)
+                st.download_button("📄 Download PDF Report",data=pb,
+                    file_name=f"STU_DrugStorage_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",use_container_width=True)
+            except Exception as e: st.error(f"PDF error: {e}")
+    with col2:
+        with st.spinner("Generating Word doc..."):
+            try:
+                wb=generate_word(df.copy(),n)
+                st.download_button("📝 Download Word Report",data=wb,
+                    file_name=f"STU_DrugStorage_{datetime.now().strftime('%Y%m%d')}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True)
+            except Exception as e: st.error(f"Word error: {e}")
+    with col3:
+        csv_d=df.to_csv(index=False).encode("utf-8")
+        st.download_button("📊 Download CSV Data",data=csv_d,
+            file_name=f"STU_DrugStorage_Data_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",use_container_width=True)
     st.markdown("---")
-    st.info("💡 **Tip for thesis:** Use the CSV download below for SPSS/Excel analysis, and use browser Print → Save as PDF to export this report page.")
-    csv_data = df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "⬇️ Download Full Dataset as CSV (for SPSS / Excel analysis)",
-        data=csv_data,
-        file_name=f"STU_DrugStorageSurvey_Data_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
+    st.markdown("### Report Preview")
+    st.markdown("#### 1. Respondent Profile")
+    c1,c2,c3=st.columns(3)
+    with c1:
+        st.markdown("**Pharmacy Type**")
+        pt=df["pharmacy_type"].value_counts().reset_index(); pt.columns=["Type","Count"]
+        pt["Percentage"]=(pt["Count"]/n*100).round(1).astype(str)+"%"
+        st.dataframe(pt,hide_index=True,use_container_width=True)
+    with c2:
+        st.markdown("**Location**")
+        lt=df["location_type"].value_counts().reset_index(); lt.columns=["Location","Count"]
+        lt["Percentage"]=(lt["Count"]/n*100).round(1).astype(str)+"%"
+        st.dataframe(lt,hide_index=True,use_container_width=True)
+    with c3:
+        st.markdown("**Experience (years)**")
+        es=df["years_experience"].describe().round(1)
+        st.dataframe(es.reset_index().rename(columns={"index":"Stat","years_experience":"Years"}),hide_index=True,use_container_width=True)
+    st.markdown("#### 2. Storage Infrastructure")
+    ek=["has_ac","has_refrigerator","has_thermometer","has_hygrometer","has_proper_shelving","has_ventilation"]
+    el=["Air Conditioning","Refrigerator","Thermometer","Hygrometer","Proper Shelving","Ventilation"]
+    st.dataframe(pd.DataFrame({"Equipment":el,"Count":[int(df[k].sum()) for k in ek],
+        "% of Pharmacies":[f"{df[k].mean()*100:.1f}%" for k in ek],
+        "Status":["✅ Adequate" if df[k].mean()*100>=70 else "❌ Below Benchmark" for k in ek]}),
+        hide_index=True,use_container_width=True)
+    st.markdown("#### 3. WHO GSP Compliance")
+    gd={"GSP Indicator":["GSP Training","Written SOP","FIFO (Always)","Expiry Checks (Always)","Cold Chain","FDA Inspected"],
+        "Compliant (n)":[int(df["gsp_training_received"].sum()),int(df["has_written_sop"].sum()),
+            int((df["practises_fifo"]=="Yes").sum()),int((df["checks_expiry"]=="Yes").sum()),
+            int((df["segregates_thermolabile"]=="Yes").sum()),int(df["fda_inspected"].sum())]}
+    gdf2=pd.DataFrame(gd)
+    gdf2["% Compliant"]=(gdf2["Compliant (n)"]/n*100).round(1).astype(str)+"%"
+    gdf2["Non-compliant (n)"]=n-gdf2["Compliant (n)"]
+    gdf2["Level"]=gdf2["Compliant (n)"].apply(lambda x:"✅ Good" if x/n>=.7 else ("⚠️ Moderate" if x/n>=.4 else "❌ Poor"))
+    st.dataframe(gdf2,hide_index=True,use_container_width=True)
+    st.markdown("#### 4. Key Findings")
+    for i,f_ in enumerate([f"Air conditioning in {ac_p:.1f}% — {'above' if ac_p>=70 else 'below'} 70% benchmark.",
+        f"{gsp_p:.1f}% have WHO GSP training.",f"Only {sop_p:.1f}% have a written SOP.",
+        f"{deg_p:.1f}% observed drug degradation.",f"{df['potency_complaints'].mean()*100:.1f}% received potency complaints.",
+        f"{nev_p:.1f}% never monitor temperature.",f"{fda_p:.1f}% FDA-inspected in 2 years."],1):
+        st.markdown(f"**{i}.** {f_}")
+    st.markdown("#### 5. Policy Recommendations")
+    st.markdown("""
+1. **Mandatory monitoring equipment** — Require thermometers and hygrometers for licence renewal.
+2. **Subsidise air conditioning** — Government co-funding for AC in under-resourced pharmacies.
+3. **Annual GSP training** — Mandate annual refresher training through the Pharmacy Council.
+4. **Free SOP templates** — Distribute standardised storage SOPs to all community pharmacies.
+5. **Risk-based FDA inspections** — Increase frequency with priority on rural and high-risk facilities.
+6. **Infrastructure grants** — Ministry of Health grant programme for facility upgrades.
+    """)
+    pr=df["policy_recommendation"].dropna(); pr=pr[pr.str.strip()!=""]
+    if not pr.empty:
+        st.markdown("#### 6. Verbatim Recommendations from Pharmacists")
+        for i,rec in enumerate(pr[:20],1): st.markdown(f"**{i}.** _{rec}_")
 
 
-# ─────────────────────────────────────────────
+# ════════════════════════════════════════════════════════
 # PAGE: ABOUT
-# ─────────────────────────────────────────────
+# ════════════════════════════════════════════════════════
 def page_about():
     st.markdown("""
     ## 📖 About This Survey System
-
-    This digital platform supports the research study:
-
     > **"Evaluation of Storage Conditions of Drugs in Community Pharmacies and
     > Their Influence on Drug Potency and Shelf Life in the Sunyani Municipality, Ghana"**
-
     ---
     ### 🎓 Academic Details
-
     | | |
     |---|---|
     | **Institution** | Sunyani Technical University |
     | **Department** | Department of Pharmacy |
     | **Supervisor** | Mrs. Lydia Sarfo Mainoo |
     | **Researchers** | Obeng Theophilus (STUBTECH220600) · Yussif Asmau (STUBTECH220592) · Egawu Naomi (STUBTECH220598) |
-    | **Period** | 2026 |
-
+    | **Year** | 2026 |
     ---
-    ### 📋 Survey Sections
-
-    | Section | Coverage |
-    |---------|----------|
-    | A | Pharmacy & Pharmacist Profile |
-    | B | Physical Storage Conditions & Facilities |
-    | C | Temperature & Humidity Monitoring |
-    | D | Drug Handling & WHO GSP Compliance |
-    | E | Observed Drug Quality & Potency Issues |
-    | F | Challenges & Recommendations |
-
-    ---
-    ### 🗄️ Infrastructure
-
+    ### 🗄️ Tech Stack
     | Component | Technology |
     |-----------|------------|
-    | User Interface | Streamlit (hosted on Streamlit Cloud) |
+    | UI | Streamlit (Streamlit Cloud) |
     | Database | Supabase (PostgreSQL) |
     | Charts | Plotly (interactive) |
+    | PDF Report | ReportLab |
+    | Word Report | python-docx |
     | Language | Python 3.x |
-
-    ---
-    ### 🚀 Deployment Guide
-
-    **Step 1 — Supabase Setup**
-    1. Create a free project at [supabase.com](https://supabase.com)
-    2. Run the SQL in `supabase_schema.sql` in the SQL Editor to create the `responses` table
-    3. Deploy `send-thankyou-email` Edge Function (see `supabase/functions/send-thankyou-email/index.ts`)
-    4. Copy your **Project URL** and **anon key** from Settings → API
-
-    **Step 2 — Streamlit Cloud**
-    1. Push this project to a GitHub repository
-    2. Go to [share.streamlit.io](https://share.streamlit.io) and link your repo
-    3. Add secrets in the Streamlit Cloud dashboard:
-    ```toml
-    SUPABASE_URL = "https://xxxx.supabase.co"
-    SUPABASE_KEY = "your-anon-key-here"
-    ```
-    4. Share the generated URL with pharmacists
-
     ---
     ### 🔒 Data Privacy
-    All responses are stored securely in Supabase (PostgreSQL with row-level security).
+    All responses are stored securely in Supabase PostgreSQL.
     Data is used exclusively for academic research.
-    Respondent identities are handled with strict confidentiality.
-    The Admin Panel is password-protected to prevent unauthorised access.
+    The Admin Panel is password-protected.
     """)
 
 
-# ─────────────────────────────────────────────
-# NAVIGATION & LAYOUT
-# ─────────────────────────────────────────────
+# ════════════════════════════════════════════════════════
+# NAVIGATION
+# ════════════════════════════════════════════════════════
 render_header()
 
 st.sidebar.markdown("""
-<div style="text-align:center; padding:10px 0 18px;">
+<div style="text-align:center;padding:10px 0 18px;">
     <div style="font-size:2.4em;">💊</div>
-    <div style="font-weight:800; color:#028090; font-size:1.0em;">Drug Storage Survey</div>
-    <div style="font-size:0.75em; color:#888; margin-top:4px;">
+    <div style="font-weight:800;color:#028090;font-size:1.0em;">Drug Storage Survey</div>
+    <div style="font-size:.75em;color:#888;margin-top:4px;">
         Sunyani Technical University<br>Department of Pharmacy
     </div>
 </div>
-""", unsafe_allow_html=True)
+""",unsafe_allow_html=True)
 
-page = st.sidebar.radio(
-    "Navigation",
-    ["📋  Fill Survey", "📊  Dashboard & Charts", "📁  Responses (Admin)", "📄  Thesis Report (Admin)", "ℹ️  About"],
-    label_visibility="collapsed"
-)
+page=st.sidebar.radio("Navigation",
+    ["📋  Fill Survey","📊  Dashboard & Charts","📁  Responses (Admin)","📄  Report & Downloads (Admin)","ℹ️  About"],
+    label_visibility="collapsed")
 
 st.sidebar.markdown("---")
-count = response_count()
+count=response_count()
 st.sidebar.markdown(f"""
 <div style="background:linear-gradient(135deg,#028090,#065A82);
-            color:white; border-radius:10px; padding:14px; text-align:center;">
-    <div style="font-size:2em; font-weight:800;">{count}</div>
-    <div style="font-size:0.82em; opacity:0.9;">Responses Collected</div>
+            color:white;border-radius:10px;padding:14px;text-align:center;">
+    <div style="font-size:2em;font-weight:800;">{count}</div>
+    <div style="font-size:.82em;opacity:.9;">Responses Collected</div>
 </div>
-""", unsafe_allow_html=True)
+""",unsafe_allow_html=True)
 
 st.sidebar.markdown("""
-<div style="margin-top:18px; font-size:0.76em; color:#999; text-align:center; line-height:1.6;">
-    <b>Hosted on:</b><br>Streamlit Cloud<br>
-    <b>Database:</b><br>Supabase (PostgreSQL)<br><br>
+<div style="margin-top:18px;font-size:.76em;color:#999;text-align:center;line-height:1.6;">
+    <b>Database:</b> Supabase<br>
+    <b>Hosting:</b> Streamlit Cloud<br><br>
     <b>Admin panel</b> is password protected.
 </div>
-""", unsafe_allow_html=True)
+""",unsafe_allow_html=True)
 
-if   "Fill Survey"   in page: page_survey()
-elif "Dashboard"     in page: page_dashboard()
-elif "Responses"     in page: page_responses()
-elif "Thesis Report" in page: page_report()
-elif "About"         in page: page_about()
+if   "Fill Survey" in page: page_survey()
+elif "Dashboard"   in page: page_dashboard()
+elif "Responses"   in page: page_responses()
+elif "Report"      in page: page_report()
+elif "About"       in page: page_about()
