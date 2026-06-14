@@ -293,6 +293,12 @@ def page_survey():
 # ════════════════════════════════════════════════════════
 # PAGE: DASHBOARD
 # ════════════════════════════════════════════════════════
+def show(fig, ins=""):
+    """Render a plotly figure + optional insight box."""
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    if ins:
+        st.markdown(f'<div class="chart-insight">💡 {ins}</div>', unsafe_allow_html=True)
+
 def page_dashboard():
     df=fetch_all()
     if df.empty:
@@ -336,7 +342,7 @@ def page_dashboard():
             annotation_font=dict(size=11,color=NAVY))
         apply_layout(fig,"Storage Equipment Availability","Green ≥70% adequate | Red <70% critical gap",
             height=380,xaxis=dict(range=[0,125],title="% of Pharmacies"),yaxis_title="")
-        insight("Red bars show critical equipment gaps — each is a direct risk to drug potency and patient safety.")
+        show(fig,"Red bars show critical equipment gaps — each is a direct risk to drug potency and patient safety.")
     with c2:
         sz=df["storage_area_size"].value_counts().reset_index(); sz.columns=["Size","Count"]
         fig2=go.Figure(go.Pie(labels=sz["Size"],values=sz["Count"],hole=.45,
@@ -346,7 +352,7 @@ def page_dashboard():
         apply_layout(fig2,"Pharmacy Storage Area Sizes","Distribution of drug storage space",
             height=380,showlegend=False)
         fig2.update_xaxes(visible=False); fig2.update_yaxes(visible=False)
-        insight("Small storage areas increase risk of improper stacking, poor ventilation and cross-contamination.")
+        show(fig2,"Small storage areas increase risk of improper stacking, poor ventilation and cross-contamination.")
 
     c1,c2=st.columns(2)
     with c1:
@@ -358,7 +364,7 @@ def page_dashboard():
             hovertemplate='<b>%{x}</b><br>%{y} pharmacies<extra></extra>'))
         apply_layout(fig3,"Pharmacy Types Surveyed","Breakdown by licence category",
             height=360,xaxis_title="Pharmacy Type",yaxis_title="Count",xaxis_tickangle=-15)
-        insight("Retail community pharmacies form the majority — reflecting their dominance in Sunyani Municipality.")
+        show(fig3,"Retail community pharmacies form the majority — reflecting their dominance in Sunyani Municipality.")
     with c2:
         lt=df["location_type"].value_counts().reset_index(); lt.columns=["Location","Count"]
         pct_l=(lt["Count"]/n*100).round(1)
@@ -369,7 +375,7 @@ def page_dashboard():
             hovertemplate='<b>%{x}</b><br>%{y} pharmacies<extra></extra>'))
         apply_layout(fig4,"Pharmacy Location Distribution","Urban vs peri-urban vs rural representation",
             height=360,xaxis_title="Location Type",yaxis_title="Count")
-        insight("Rural pharmacies face greater infrastructure challenges — even small rural samples matter for equity analysis.")
+        show(fig4,"Rural pharmacies face greater infrastructure challenges — even small rural samples matter for equity analysis.")
 
     st.markdown('<hr class="section-divider">',unsafe_allow_html=True)
 
@@ -389,7 +395,7 @@ def page_dashboard():
         apply_layout(fig5,"Usual Temperature in Storage Areas","WHO recommends ≤25-30°C for most medicines",
             height=400,showlegend=False)
         fig5.update_xaxes(visible=False); fig5.update_yaxes(visible=False)
-        insight("Orange and red segments = pharmacies above WHO safe limits — drugs face accelerated chemical degradation.")
+        show(fig5,"Orange and red segments = pharmacies above WHO safe limits — drugs face accelerated chemical degradation.")
     with c2:
         hmap={"Below 45% RH  (Low)":"<45% RH (Low)","45% – 65% RH  (Optimal)":"45-65% ✅ Optimal",
               "65% – 75% RH  (Elevated Risk)":"65-75% ⚠️ Elevated","Above 75% RH  (High Risk)":">75% 🔴 High Risk","Not monitored / Unknown":"Unknown"}
@@ -403,7 +409,7 @@ def page_dashboard():
         apply_layout(fig6,"Relative Humidity in Storage Areas","Optimal range: 45-65% RH",
             height=400,showlegend=False)
         fig6.update_xaxes(visible=False); fig6.update_yaxes(visible=False)
-        insight("High humidity (>65% RH) accelerates moisture-induced degradation in antibiotics and oral tablets.")
+        show(fig6,"High humidity (>65% RH) accelerates moisture-induced degradation in antibiotics and oral tablets.")
 
     c1,c2=st.columns(2)
     with c1:
@@ -418,7 +424,7 @@ def page_dashboard():
             hovertemplate='<b>%{x}</b><br>%{y} pharmacies<extra></extra>'))
         apply_layout(fig7,"Temperature Monitoring Frequency","WHO GSP requires minimum once-daily recording",
             height=360,xaxis_title="Monitoring Frequency",yaxis_title="Pharmacies")
-        insight("'Weekly', 'Monthly' or 'Never' monitors cannot detect dangerous temperature excursions in time.")
+        show(fig7,"'Weekly', 'Monthly' or 'Never' monitors cannot detect dangerous temperature excursions in time.")
     with c2:
         if "submitted_at" in df.columns:
             df["sdt"]=pd.to_datetime(df["submitted_at"],errors="coerce")
@@ -435,7 +441,7 @@ def page_dashboard():
             apply_layout(fig8,"Survey Submission Trend Over Time","Daily (bars) and cumulative total (line)",
                 height=360,xaxis_title="Date",yaxis_title="Responses",
                 legend=dict(orientation='h',y=-.25))
-            insight("This trend tracks data collection progress — useful for reporting fieldwork timeline in thesis methodology.")
+            show(fig8,"This trend tracks data collection progress — useful for reporting fieldwork timeline in thesis methodology.")
 
     st.markdown('<hr class="section-divider">',unsafe_allow_html=True)
 
@@ -459,7 +465,7 @@ def page_dashboard():
             height=420,barmode='stack',xaxis_tickangle=-15,
             yaxis=dict(title="% of Pharmacies",range=[0,100]),
             legend=dict(orientation='h',y=-.28))
-        insight("Large red segments show which GSP practices are most neglected — priority areas for training and enforcement.")
+        show(fig9,"Large red segments show which GSP practices are most neglected — priority areas for training and enforcement.")
     with c2:
         cats=["Degradation\nObserved","Colour\nChanges","Potency\nComplaints","Returned\nStock","No Written\nSOP","No\nThermometer"]
         rv=[df["observed_degradation"].mean()*100,df["observed_color_change"].mean()*100,
@@ -477,7 +483,7 @@ def page_dashboard():
                 "<sup style='color:#666'>Larger shaded area = broader systemic risk</sup>",
                 font=dict(size=15,color="#065A82"),x=.01),
             height=420,showlegend=False)
-        insight("A large shaded area means risk is widespread across multiple dimensions — not just one isolated problem.")
+        show(fig10,"A large shaded area means risk is widespread across multiple dimensions — not just one isolated problem.")
 
     c1,c2=st.columns(2)
     with c1:
@@ -492,7 +498,7 @@ def page_dashboard():
             hovertemplate='<b>%{x}</b><br>%{y} pharmacies<extra></extra>'))
         apply_layout(fig11,"Pharmacists' Self-Rated GSP Compliance","Self-perception vs objective compliance data",
             height=380,xaxis_title="Self-Rating",yaxis_title="Count")
-        insight("Compare this self-perception with the objective stacked bar — a large gap indicates overconfidence and training need.")
+        show(fig11,"Compare this self-perception with the objective stacked bar — a large gap indicates overconfidence and training need.")
     with c2:
         rnum={"Very Poor":1,"Poor":2,"Fair":3,"Good":4,"Excellent":5}
         df["cnum"]=df["self_compliance_rating"].map(rnum)
@@ -508,7 +514,7 @@ def page_dashboard():
             yaxis=dict(title="Compliance (1=Very Poor, 5=Excellent)",
                 tickvals=[1,2,3,4,5],ticktext=["Very Poor","Poor","Fair","Good","Excellent"]),
             legend=dict(orientation='h',y=-.28))
-        insight("The trend line shows if experienced pharmacists rate themselves higher — relevant for experience-based training design.")
+        show(fig12,"The trend line shows if experienced pharmacists rate themselves higher — relevant for experience-based training design.")
 
     st.markdown('<hr class="section-divider">',unsafe_allow_html=True)
 
@@ -525,7 +531,7 @@ def page_dashboard():
             hovertemplate='<b>%{y}</b><br>%{x} pharmacies<extra></extra>'))
         apply_layout(fig13,"Drug Quality Incidents — Last 12 Months","Pharmacies reporting each incident frequency band",height=400)
         fig13.update_xaxes(visible=False); fig13.update_yaxes(visible=False)
-        insight("Pharmacies reporting 4+ incidents per year signal systemic storage failures needing urgent regulatory follow-up.")
+        show(fig13,"Pharmacies reporting 4+ incidents per year signal systemic storage failures needing urgent regulatory follow-up.")
     with c2:
         qk=["observed_degradation","observed_color_change","potency_complaints","returned_stock_quality"]
         ql=["Degradation","Colour Change","Potency Complaints","Returned Stock"]
@@ -541,7 +547,7 @@ def page_dashboard():
         apply_layout(fig14,"Drug Quality Issues by Pharmacy Type","% of each type reporting each quality problem",
             height=400,barmode='group',xaxis_title="Quality Indicator",yaxis_title="% Reporting",
             legend=dict(orientation='h',y=-.28))
-        insight("Comparing quality issue rates across pharmacy types identifies which category needs the most regulatory attention.")
+        show(fig14,"Comparing quality issue rates across pharmacy types identifies which category needs the most regulatory attention.")
 
     c1,c2=st.columns(2)
     with c1:
@@ -557,7 +563,7 @@ def page_dashboard():
                 hovertemplate='<b>%{y}</b><br>%{x} pharmacies<extra></extra>'))
             apply_layout(fig15,"Most Affected Drug Categories (Degradation)","Drug types most frequently observed to degrade",
                 height=380,xaxis_title="Number of Reports",yaxis_title="")
-            insight("The top drug categories need priority attention in cold chain management and storage guidelines.")
+            show(fig15,"The top drug categories need priority attention in cold chain management and storage guidelines.")
         else:
             st.info("No drug type degradation data recorded yet.")
     with c2:
@@ -573,7 +579,7 @@ def page_dashboard():
                 hovertemplate='<b>%{y}</b> — <b>%{x}</b>: %{z:.1f}%<extra></extra>',
                 colorbar=dict(title="% with equipment",ticksuffix="%")))
             apply_layout(fig16,"Equipment Availability by Location Type","Green=high availability | Red=critical gap",height=380)
-            insight("Rural pharmacies in red cells are the most underserved — supports equity-based policy recommendations.")
+            show(fig16,"Rural pharmacies in red cells are the most underserved — supports equity-based policy recommendations.")
 
     st.markdown('<hr class="section-divider">',unsafe_allow_html=True)
 
@@ -598,7 +604,7 @@ def page_dashboard():
             hovertemplate='<b>%{y}</b><br>%{x} pharmacies<extra></extra>'))
         apply_layout(fig17,"Biggest Challenges to Proper Drug Storage","Ranked by number of pharmacies citing each barrier",
             height=400,xaxis_title="Number of Pharmacies",yaxis_title="")
-        insight("The longest bar identifies the single most critical barrier — this should be the first policy intervention priority.")
+        show(fig17,"The longest bar identifies the single most critical barrier — this should be the first policy intervention priority.")
     with c2:
         ssh={"Subsidised air conditioning and refrigeration equipment":"Subsidised Equipment",
              "Regular GSP training workshops":"GSP Training","Affordable data loggers or thermometers":"Affordable Monitoring",
@@ -614,7 +620,7 @@ def page_dashboard():
         apply_layout(fig18,"Type of Support Most Needed","What pharmacists say would most improve storage quality",
             height=400,showlegend=False)
         fig18.update_xaxes(visible=False); fig18.update_yaxes(visible=False)
-        insight("The dominant segment shows where investment would have the greatest impact on drug storage quality.")
+        show(fig18,"The dominant segment shows where investment would have the greatest impact on drug storage quality.")
 
 # ════════════════════════════════════════════════════════
 # PAGE: RESPONSES (Admin)
